@@ -1,0 +1,3423 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bibliothèque</title>
+<!--
+  Seule ressource externe tolérée : Google Fonts (Literata + Inter).
+  Des polices de repli sont déclarées partout pour que la page reste
+  correcte hors ligne (ouverture en file://, réseau coupé, etc.).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;0,7..72,700;1,7..72,400;1,7..72,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* --- Palette (reprise telle quelle du cahier des charges) --- */
+    --salle: #150e08;
+    --meuble-haut: #33200f;
+    --meuble-bas: #26160a;
+    --bois-clair: #8a6133;
+    --bois-lumiere: #b58a4e;
+    --laiton: #c8a23a;
+    --laiton-clair: #f4e3ac;
+    --laiton-fonce: #7a5f14;
+    --papier: #f6edd9;
+    --papier-creux: #e4d5b6;
+    --encre: #2a2015;
+    --encre-pale: #7a6547;
+    --signet: #a8322a;
+
+    /* --- Typographie --- */
+    --police-texte: "Literata", "Iowan Old Style", "Georgia", serif;
+    --police-ui: "Inter", "Helvetica Neue", Arial, sans-serif;
+
+    /* --- Grain de matière, généré en SVG, utilisé en fond --- */
+    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--salle);
+    color: var(--papier);
+    font-family: var(--police-texte);
+  }
+
+  #app{
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ========================================================================
+     Le meuble
+     ======================================================================== */
+
+  .meuble{
+    position: relative;
+    width: 100%;
+    max-width: 1120px;
+  }
+
+  /* Halo de lampe, au-dessus de tout, ne capte jamais le curseur. */
+  .halo{
+    position: absolute;
+    top: -70px;
+    left: 50%;
+    width: 680px;
+    height: 340px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at 50% 0%, rgba(255,224,170,.30), rgba(255,224,170,0) 72%);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .corniche, .plinthe{
+    position: relative;
+    height: 32px;
+    box-shadow: 0 8px 16px rgba(0,0,0,.5);
+  }
+  .corniche{
+    background: linear-gradient(180deg, var(--bois-lumiere) 0%, var(--meuble-haut) 65%, var(--meuble-bas) 100%);
+    border-radius: 6px 6px 0 0;
+    border-bottom: 3px solid var(--meuble-bas);
+  }
+  .plinthe{
+    background: linear-gradient(180deg, var(--meuble-bas) 0%, var(--meuble-haut) 55%, var(--bois-lumiere) 100%);
+    border-radius: 0 0 6px 6px;
+    border-top: 3px solid var(--meuble-bas);
+  }
+  /* Grain de matière : même texture SVG posée sur la corniche et la plinthe. */
+  .corniche::after, .plinthe::after{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: var(--grain);
+    opacity: .5;
+    mix-blend-mode: overlay;
+  }
+
+  .corps-meuble{
+    position: relative;
+    display: flex;
+    background: linear-gradient(180deg, var(--meuble-haut), var(--meuble-bas));
+    box-shadow: inset 0 0 60px rgba(0,0,0,.5);
+  }
+  .corps-meuble::before{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: var(--grain);
+    opacity: .35;
+    pointer-events: none;
+  }
+
+  .montant{
+    flex: 0 0 30px;
+    position: relative;
+    z-index: 1;
+    background:
+      repeating-linear-gradient(180deg,
+        var(--bois-clair) 0 3px,
+        var(--bois-lumiere) 3px 4px,
+        var(--meuble-haut) 4px 10px);
+    box-shadow: inset 0 0 14px rgba(0,0,0,.6);
+  }
+
+  .rayons{
+    flex: 1 1 auto;
+    position: relative;
+    z-index: 1;
+    padding: 10px 8px 0;
+    min-width: 0;
+  }
+
+  /* ========================================================================
+     Un rayon : les tranches, puis la planche.
+     ======================================================================== */
+
+  .rayon{
+    position: relative;
+    margin-bottom: 2px;
+    /* Empêche la marge négative de .tranches (compensation du padding-top)
+       de remonter hors du rayon par collapsing avec son premier enfant. */
+    display: flow-root;
+  }
+
+  .rayon .tranches{
+    display: flex;
+    align-items: flex-end;
+    gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--laiton-fonce) transparent;
+    /* overflow-x:auto force overflow-y à devenir un conteneur de défilement :
+       on réserve donc une marge haute pour que le soulèvement au survol et
+       le signet ne soient jamais rognés (une marge négative de compensation
+       casse ici la détection de clic sur les tranches : on l'évite). */
+    padding-top: 34px;
+    box-shadow: inset 0 10px 12px -11px rgba(0,0,0,.65);
+  }
+
+  /* Planche : construite en bandes horizontales pour donner l'épaisseur. */
+  .planche{
+    position: relative;
+    height: 27px;
+  }
+  .planche-arete-haute{
+    height: 1px;
+    background: var(--bois-lumiere);
+  }
+  .planche-face-sup{
+    height: 7px;
+    background: linear-gradient(180deg, var(--bois-lumiere), var(--bois-clair));
+  }
+  .planche-arete-sombre{
+    height: 2px;
+    background: var(--meuble-bas);
+  }
+  .planche-chant-avant{
+    height: 17px;
+    position: relative;
+    background: linear-gradient(180deg, var(--bois-clair), var(--meuble-haut));
+    box-shadow: 0 6px 10px -3px rgba(0,0,0,.65);
+  }
+
+  /* Étiquette de rayon : plaque de laiton vissée sur le chant avant. */
+  .etiquette{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 16px;
+    white-space: nowrap;
+    font-family: var(--police-ui);
+    font-size: 11px;
+    letter-spacing: .03em;
+    color: var(--encre);
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton) 45%, var(--laiton-fonce));
+    border: 1px solid var(--laiton-fonce);
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.45);
+  }
+  .etiquette::before, .etiquette::after{
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    background: radial-gradient(circle at 35% 35%, var(--laiton-clair), var(--laiton-fonce));
+    box-shadow: 0 0 0 1px rgba(0,0,0,.45);
+  }
+  .etiquette::before{ left: 5px; }
+  .etiquette::after{ right: 5px; }
+  .etiquette .compte{
+    opacity: .7;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ========================================================================
+     Une tranche
+     ======================================================================== */
+
+  .tranche{
+    --couleur-effective: var(--couleur);
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--w);
+    height: var(--h);
+    padding: 0;
+    border: none;
+    cursor: pointer;
+    appearance: none;
+    background:
+      linear-gradient(90deg,
+        color-mix(in srgb, black 35%, var(--couleur-effective)) 0%,
+        color-mix(in srgb, black 35%, var(--couleur-effective)) 4%,
+        color-mix(in srgb, white 13%, var(--couleur-effective)) 4%,
+        color-mix(in srgb, white 13%, var(--couleur-effective)) 9%,
+        var(--couleur-effective) 9%,
+        var(--couleur-effective) 88%,
+        color-mix(in srgb, black 30%, var(--couleur-effective)) 100%);
+    box-shadow: 1px 0 0 rgba(0,0,0,.35);
+    transform: translateY(var(--decalage, 0px)) rotate(var(--rotation, 0deg));
+    transform-origin: bottom center;
+    transition: transform .18s cubic-bezier(.2,.7,.3,1), filter .18s ease;
+    outline-offset: 2px;
+  }
+  .tranche:hover, .tranche:focus-visible{
+    --decalage: -10px;
+    filter: brightness(1.08);
+  }
+  .tranche:focus-visible{
+    outline: 2px solid var(--laiton-clair);
+  }
+
+  /* Filets dorés en tête et en queue de tranche. */
+  .tranche .filet{
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--laiton), transparent);
+    opacity: .8;
+  }
+  .tranche .filet-haut{ top: 8px; }
+  .tranche .filet-bas{ bottom: 8px; }
+
+  /* Titre vertical : largeur fixée avant rotation. La taille de police est
+     recalculée par livre (voir ajusterTexteVertical) pour que le titre
+     entier tienne sans jamais être tronqué, même sans survol ; l'ellipse
+     ne reste qu'un filet de sécurité pour un cas extrême. */
+  .tranche .zone-titre{
+    position: absolute;
+    left: 50%;
+    top: 16px;
+    width: calc(var(--h) - 94px);
+    height: 18px;
+    line-height: 18px;
+    transform: translateX(-50%) rotate(-90deg);
+    transform-origin: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--police-texte);
+    font-size: var(--taille-titre, 12px);
+    font-weight: 600;
+    color: var(--laiton-clair);
+    z-index: 1;
+  }
+
+  /* Auteur vertical, dans une zone réservée en bas de la tranche : plus
+     grande et plus contrastée qu'un simple sous-titre pour rester lisible. */
+  .tranche .zone-auteur{
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    width: 60px;
+    height: 14px;
+    line-height: 14px;
+    transform: translateX(-50%) rotate(-90deg);
+    transform-origin: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--police-ui);
+    font-size: var(--taille-auteur, 10px);
+    font-weight: 600;
+    color: var(--laiton-clair);
+    opacity: .92;
+    z-index: 1;
+  }
+
+  /* --- Trois traitements de dos, hachage déterministe de l'id --- */
+
+  /* Pièce de titre : panneau de cuir plus sombre cerné de deux filets d'or. */
+  .tranche.dos-piece::before{
+    content: "";
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    top: 14px;
+    height: calc(var(--h) - 94px);
+    background: color-mix(in srgb, black 22%, var(--couleur-effective));
+    border-top: 1px solid var(--laiton);
+    border-bottom: 1px solid var(--laiton);
+  }
+
+  /* Dos à nerfs : deux bourrelets en relief, hors de la zone du titre. */
+  .tranche.dos-nerfs .nerf{
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    height: 5px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, rgba(255,255,255,.4), rgba(0,0,0,.35));
+    box-shadow: 0 1px 1px rgba(0,0,0,.5);
+  }
+  .tranche.dos-nerfs .nerf-haut{ top: 4px; }
+  .tranche.dos-nerfs .nerf-bas{ bottom: 60px; }
+
+  /* --- États --- */
+
+  /* Pas encore téléchargé : tranche pâlie, texture rayée, liseré clair. */
+  .tranche.pas-telecharge{
+    --couleur-effective: color-mix(in srgb, var(--couleur) 50%, #cdbd93 50%);
+  }
+  .tranche.pas-telecharge::after{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(46deg,
+      rgba(255,255,255,.10) 0 3px,
+      rgba(255,255,255,0) 3px 7px);
+    box-shadow: inset 0 0 0 1px rgba(255,246,222,.35);
+  }
+
+  /* Lu : signet de tissu rouge, dépassant du haut, découpé en V. */
+  .tranche.lu .signet{
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    width: 58%;
+    height: 16px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, var(--signet), color-mix(in srgb, black 25%, var(--signet)));
+    clip-path: polygon(0 0, 50% 38%, 100% 0, 100% 100%, 0 100%);
+    z-index: 2;
+  }
+
+  /* Infobulle : couverture miniature, titre, auteur.
+     Positionnée sur le côté (et non au-dessus) pour ne jamais être rognée
+     par le overflow-y:hidden du rayon. */
+  .tranche .infobulle{
+    position: absolute;
+    bottom: 0;
+    left: calc(100% + 10px);
+    transform: translateX(-4px);
+    width: 128px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: var(--papier);
+    color: var(--encre);
+    border: 1px solid var(--laiton-fonce);
+    border-radius: 3px;
+    box-shadow: 0 8px 20px rgba(0,0,0,.55);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+    z-index: 5;
+    text-align: center;
+  }
+  .tranche:hover .infobulle,
+  .tranche:focus-visible .infobulle{
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+  }
+  .infobulle-vignette{
+    width: 60px;
+    height: 84px;
+    border: 2px solid var(--laiton);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--laiton-clair);
+    background: var(--couleur-vignette, #333);
+  }
+  .infobulle-titre{
+    font-family: var(--police-texte);
+    font-size: 12px;
+    line-height: 1.25;
+  }
+  .infobulle-auteur{
+    font-family: var(--police-ui);
+    font-size: 10.5px;
+    color: var(--encre-pale);
+  }
+
+  /* Dernier livre d'un rayon, s'il reste assez de place mesurée : incliné. */
+  .tranche.incline{
+    --rotation: var(--angle, 7deg);
+  }
+
+  /* ========================================================================
+     Le livre ouvert
+     ======================================================================== */
+
+  .voile{
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(10,6,2,.55), rgba(4,2,1,.88));
+    z-index: 55;
+    opacity: 0;
+    transition: opacity .35s ease;
+  }
+  .voile[hidden]{ display: none; }
+  .voile.visible{ opacity: 1; }
+
+  .scene-livre{
+    position: fixed;
+    inset: 0;
+    z-index: 56;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    perspective: 2600px;
+    /* Transparent aux clics : un clic hors du livre doit atteindre le
+       voile en dessous (pour le fermer), pas cette scène qui l'englobe. */
+    pointer-events: none;
+  }
+  .scene-livre[hidden]{ display: none; }
+
+  .livre-ouvert{
+    position: relative;
+    display: flex;
+    width: min(920px, 94vw);
+    height: min(640px, 88vh);
+    transform-style: preserve-3d;
+    filter: drop-shadow(0 30px 55px rgba(0,0,0,.6));
+    outline: none;
+    pointer-events: auto;
+  }
+
+  .page{
+    position: relative;
+    flex: 1 1 50%;
+    min-width: 0;
+    background: var(--papier);
+    padding: 34px 30px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+    box-shadow: inset 0 0 40px rgba(120,90,50,.15);
+    color: var(--encre);
+  }
+  .page::before{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: var(--grain);
+    opacity: .4;
+    pointer-events: none;
+  }
+  .page-gauche{
+    border-radius: 10px 3px 3px 10px;
+    transform-origin: right center;
+    padding-left: 36px;
+    text-align: center;
+  }
+  .page-droite{
+    border-radius: 3px 10px 10px 3px;
+    transform-origin: left center;
+    padding-right: 36px;
+  }
+
+  /* Tranche de pages : rayé 1px sur 7px, en couche de fond. */
+  .tranche-pages{
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    width: 7px;
+    background-image: repeating-linear-gradient(180deg, var(--papier-creux) 0 1px, var(--papier) 1px 2px);
+    background-repeat: no-repeat;
+    z-index: 1;
+  }
+  .tranche-pages-gauche{ left: 0; }
+  .tranche-pages-droite{ right: 0; }
+
+  /* Reliure centrale, avec tranchefiles en tête et en queue. */
+  .reliure-centrale{
+    position: absolute;
+    left: 50%;
+    top: -8px;
+    bottom: -8px;
+    width: 28px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, var(--meuble-bas), var(--meuble-haut) 50%, var(--meuble-bas));
+    box-shadow: 0 0 20px rgba(0,0,0,.6), inset 0 0 10px rgba(0,0,0,.55);
+    border-radius: 4px;
+    z-index: 3;
+  }
+  .tranchefile{
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    height: 7px;
+    background: repeating-linear-gradient(90deg, var(--signet) 0 4px, var(--papier-creux) 4px 8px);
+  }
+  .tranchefile-haut{ top: 2px; border-radius: 3px; }
+  .tranchefile-bas{ bottom: 2px; border-radius: 3px; }
+
+  /* Ruban de tissu, ne pend que si le livre est marqué "lu". */
+  .ruban-lu{
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 14px;
+    height: 74px;
+    transform: translateX(-50%) scaleY(.85);
+    transform-origin: top center;
+    background: linear-gradient(180deg, var(--signet), color-mix(in srgb, black 22%, var(--signet)));
+    clip-path: polygon(0 0, 100% 0, 100% 88%, 50% 100%, 0 88%);
+    opacity: 0;
+    transition: opacity .25s ease, transform .25s ease;
+    z-index: 2;
+  }
+  .ruban-lu.visible{
+    opacity: 1;
+    transform: translateX(-50%) scaleY(1);
+  }
+
+  .fermer-livre{
+    position: absolute;
+    top: -16px;
+    right: -16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton) 50%, var(--laiton-fonce));
+    border: 1px solid var(--laiton-fonce);
+    color: var(--encre);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,.5);
+    z-index: 5;
+  }
+  .fermer-livre:hover{ filter: brightness(1.1); }
+  .fermer-livre:focus-visible{ outline: 2px solid var(--laiton-clair); outline-offset: 2px; }
+
+  /* --- Champs éditables en place --- */
+  [contenteditable]{
+    outline: none;
+    border-bottom: 1px dotted transparent;
+    transition: border-color .15s ease;
+    cursor: text;
+  }
+  [contenteditable]:hover,
+  [contenteditable]:focus{
+    border-bottom-color: var(--encre-pale);
+  }
+  [contenteditable]:empty::before{
+    content: attr(data-vide);
+    color: var(--encre-pale);
+    font-style: italic;
+  }
+
+  /* --- Page de gauche : couverture, identité --- */
+  .couverture{
+    position: relative;
+    width: 168px;
+    height: 232px;
+    margin: 0 auto 16px;
+    z-index: 2;
+  }
+  .couverture-generee, .couverture-image{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .couverture-generee{
+    background: var(--couleur-couv, #333);
+    border: 3px double var(--laiton);
+    outline: 1px solid var(--laiton-fonce);
+    outline-offset: -7px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 18px;
+    text-align: center;
+    color: var(--laiton-clair);
+    box-sizing: border-box;
+  }
+  .couverture-image{
+    object-fit: cover;
+    border: 3px double var(--laiton);
+  }
+  .couverture-image[hidden], .couverture-generee[hidden]{ display: none; }
+  .fleuron{ font-size: 22px; }
+  .couv-titre{ font-family: var(--police-texte); font-size: 15px; font-weight: 600; line-height: 1.3; }
+  .couv-filet{ width: 42%; height: 1px; background: var(--laiton); }
+  .couv-auteur{ font-style: italic; font-size: 12px; }
+  .couv-annee{ position: absolute; bottom: 12px; left: 0; right: 0; font-size: 11px; opacity: .8; }
+
+  .titre-livre{
+    font-family: var(--police-texte);
+    font-size: 25px;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 4px 0 4px;
+  }
+  .auteur-livre{
+    font-family: var(--police-ui);
+    font-size: 14px;
+    color: var(--encre-pale);
+    margin-bottom: 10px;
+  }
+  .meta-livre{
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    font-family: var(--police-ui);
+    font-size: 12px;
+    color: var(--encre-pale);
+    margin-bottom: 18px;
+  }
+  .meta-livre > span{ min-width: 16px; min-height: 1em; display: inline-block; }
+
+  .palette-reliure{
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .swatch{
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.3);
+    cursor: pointer;
+    padding: 0;
+  }
+  .swatch.actif{
+    border-color: var(--laiton-clair);
+    box-shadow: 0 0 0 2px var(--laiton-fonce);
+  }
+
+  .boutons-couverture{
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .boutons-couverture[hidden]{ display: none; }
+  .boutons-couverture button{
+    font-family: var(--police-ui);
+    font-size: 12px;
+    padding: 7px 10px;
+    background: transparent;
+    border: 1px solid var(--encre-pale);
+    color: var(--encre);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .boutons-couverture button:hover{ background: rgba(0,0,0,.06); }
+
+  /* --- Coller une adresse : champ en place, pas de prompt() natif --- */
+  .collage-url{
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .collage-url[hidden]{ display: none; }
+  #champ-url-couverture{
+    font-family: var(--police-ui);
+    font-size: 12px;
+    padding: 7px 9px;
+    border: 1px solid var(--encre-pale);
+    border-radius: 3px;
+    background: var(--papier-creux);
+    color: var(--encre);
+  }
+  .collage-url-actions{ display: flex; gap: 6px; }
+  .collage-url-actions button{
+    flex: 1 1 auto;
+    font-family: var(--police-ui);
+    font-size: 11.5px;
+    padding: 6px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .collage-url-actions [data-action="valider-url"]{
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton));
+    border: 1px solid var(--laiton-fonce);
+    color: var(--encre);
+  }
+  .collage-url-actions [data-action="annuler-url"]{
+    background: none;
+    border: 1px solid var(--encre-pale);
+    color: var(--encre);
+  }
+
+  /* --- Chercher en ligne : vignettes de couverture à choisir --- */
+  .resultats-couverture{
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .resultats-couverture[hidden]{ display: none; }
+  .resultats-couverture .statut-recherche-couv{
+    font-family: var(--police-ui);
+    font-size: 11.5px;
+    color: var(--encre-pale);
+    width: 100%;
+  }
+  .vignette-couv-choix{
+    width: 44px;
+    height: 62px;
+    padding: 0;
+    border: 2px solid var(--encre-pale);
+    border-radius: 2px;
+    cursor: pointer;
+    background: var(--papier-creux);
+    overflow: hidden;
+  }
+  .vignette-couv-choix:hover, .vignette-couv-choix:focus-visible{
+    border-color: var(--laiton);
+    outline: none;
+  }
+  .vignette-couv-choix img{ width: 100%; height: 100%; object-fit: cover; }
+
+  /* --- Page de droite : résumé, thèmes, contrôles, note --- */
+  .entete-droite{
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+  }
+  .rayon-badge{
+    font-family: var(--police-ui);
+    font-size: 11px;
+    padding: 3px 12px;
+    border: 1px solid var(--laiton-fonce);
+    border-radius: 10px;
+    color: var(--encre-pale);
+  }
+
+  .resume-livre{
+    font-size: 15px;
+    line-height: 1.65;
+    text-align: justify;
+    hyphens: auto;
+    min-height: 1.65em;
+  }
+  .resume-livre::first-letter{
+    float: left;
+    font-family: var(--police-texte);
+    font-size: 48px;
+    line-height: .78;
+    padding: 4px 6px 0 0;
+    font-weight: 700;
+  }
+
+  .filet-resume{
+    height: 1px;
+    background: var(--encre-pale);
+    opacity: .4;
+    margin: 16px 0;
+  }
+
+  .themes-livre{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .pastille{
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--police-ui);
+    font-size: 11px;
+    padding: 3px 8px 3px 10px;
+    background: var(--papier-creux);
+    border: 1px solid var(--encre-pale);
+    border-radius: 12px;
+  }
+  .pastille button{
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--encre-pale);
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+  }
+  .ajouter-theme, .champ-theme{
+    font-family: var(--police-ui);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+  .ajouter-theme{
+    border: 1px dashed var(--encre-pale);
+    background: none;
+    cursor: pointer;
+    color: var(--encre-pale);
+  }
+  .champ-theme{
+    border: 1px solid var(--encre-pale);
+    min-width: 80px;
+  }
+
+  .segmente{
+    display: flex;
+    flex-wrap: wrap;
+    max-width: 100%;
+    border: 1px solid var(--laiton-fonce);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 0 14px;
+  }
+  .segmente button{
+    flex: 1 1 auto;
+    font-family: var(--police-ui);
+    font-size: 11px;
+    padding: 6px 8px;
+    background: var(--papier-creux);
+    border: none;
+    border-right: 1px solid var(--laiton-fonce);
+    cursor: pointer;
+    color: var(--encre);
+    white-space: nowrap;
+  }
+  .segmente button:last-child{ border-right: none; }
+  .segmente button[aria-pressed="true"]{
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton));
+    font-weight: 600;
+  }
+
+  .ligne-controles{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .interrupteur{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--police-ui);
+    font-size: 12px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--encre);
+  }
+  .interrupteur .rail{
+    width: 34px;
+    height: 18px;
+    border-radius: 10px;
+    background: var(--encre-pale);
+    position: relative;
+    transition: background .2s ease;
+  }
+  .interrupteur .rail::after{
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--papier);
+    transition: transform .2s ease;
+  }
+  .interrupteur[aria-checked="true"] .rail{ background: var(--laiton-fonce); }
+  .interrupteur[aria-checked="true"] .rail::after{ transform: translateX(16px); }
+
+  .bloc-note{ margin-top: 14px; }
+  .note-livre{
+    min-height: 92px;
+    background-image: repeating-linear-gradient(180deg, transparent 0 22px, var(--encre-pale) 22px 23px);
+    line-height: 23px;
+    font-family: var(--police-texte);
+    font-size: 13px;
+    padding-top: 1px;
+  }
+
+  .actions-livre{
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .retirer-livre{
+    font-family: var(--police-ui);
+    font-size: 12px;
+    color: var(--signet);
+    background: none;
+    border: 1px solid var(--signet);
+    padding: 7px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .retirer-livre:hover{ background: color-mix(in srgb, var(--signet) 10%, transparent); }
+  .confirmation-suppr{
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-family: var(--police-ui);
+    font-size: 12px;
+  }
+  .confirmation-suppr button{
+    padding: 7px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: var(--police-ui);
+    font-size: 12px;
+  }
+  .confirmation-suppr .oui{
+    background: var(--signet);
+    color: var(--papier);
+    border: none;
+  }
+  .confirmation-suppr .annuler{
+    background: none;
+    border: 1px solid var(--encre-pale);
+    color: var(--encre);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .livre-ouvert, .page-gauche, .page-droite{ transition: none !important; }
+  }
+
+  /* ========================================================================
+     Bandeau : mode d'organisation, recherche, compteurs
+     ======================================================================== */
+
+  .bandeau{
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto 16px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-family: var(--police-ui);
+  }
+  .bandeau .segmente{ margin: 0; }
+
+  .recherche input{
+    font-family: var(--police-ui);
+    font-size: 13px;
+    padding: 7px 12px;
+    border: 1px solid var(--laiton-fonce);
+    border-radius: 4px;
+    background: var(--papier-creux);
+    color: var(--encre);
+    min-width: 220px;
+  }
+  .recherche input::placeholder{ color: var(--encre-pale); }
+  .recherche input:focus-visible{ outline: 2px solid var(--laiton-clair); outline-offset: 1px; }
+
+  .compteurs{
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--laiton-clair);
+    opacity: .85;
+    white-space: nowrap;
+  }
+  .etat-couvertures{
+    margin-left: auto;
+    font-size: 11.5px;
+    font-style: italic;
+    color: var(--laiton-clair);
+    opacity: .65;
+    white-space: nowrap;
+  }
+  .etat-couvertures[hidden]{ display: none; }
+  /* Quand les deux sont visibles, seul le compteur garde la marge auto. */
+  .etat-couvertures + .compteurs{ margin-left: 14px; }
+
+  .aucun-resultat{
+    width: 100%;
+    max-width: 1120px;
+    margin: -6px auto 12px;
+    padding: 0 8px;
+    font-family: var(--police-ui);
+    font-size: 12px;
+    color: var(--laiton-clair);
+    opacity: .7;
+    text-align: center;
+  }
+  .aucun-resultat[hidden]{ display: none; }
+
+  /* --- Recherche : les livres qui ne correspondent pas s'estompent --- */
+  .tranche.estompee{
+    opacity: .3;
+    filter: grayscale(.75);
+    transition: opacity .2s ease, filter .2s ease;
+  }
+  .tranche.estompee:hover,
+  .tranche.estompee:focus-visible{
+    filter: brightness(1.08) grayscale(.75);
+  }
+
+  /* --- Glisser-déposer --- */
+  .tranche.en-glissement{ opacity: .35; }
+  .tranche.espace-avant{
+    margin-left: var(--gap, 34px);
+    transition: margin-left .15s ease;
+  }
+  .rayon .tranches.espace-fin{
+    padding-right: var(--gap, 34px);
+    transition: padding-right .15s ease;
+  }
+  /* Surligne tout le rayon visé, pas seulement l'espace exact d'insertion :
+     sur une planche presque vide, ce dernier serait trop discret pour se
+     voir. */
+  .rayon .tranches.survolee{
+    background: color-mix(in srgb, var(--laiton) 12%, transparent);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--laiton-clair) 55%, transparent);
+  }
+
+  /* ========================================================================
+     Ajout de livres et robustesse réseau
+     ======================================================================== */
+
+  .bouton-ajouter{
+    font-family: var(--police-ui);
+    font-size: 12px;
+    padding: 7px 14px;
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton) 60%, var(--laiton-fonce));
+    border: 1px solid var(--laiton-fonce);
+    border-radius: 4px;
+    color: var(--encre);
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+  .bouton-ajouter:hover{ filter: brightness(1.06); }
+  .bouton-ajouter:focus-visible{ outline: 2px solid var(--laiton-clair); outline-offset: 2px; }
+
+  .bouton-io{
+    font-family: var(--police-ui);
+    font-size: 12px;
+    padding: 7px 12px;
+    background: none;
+    border: 1px solid var(--laiton);
+    border-radius: 4px;
+    color: var(--laiton-clair);
+    cursor: pointer;
+  }
+  .bouton-io:hover{ background: color-mix(in srgb, var(--laiton) 15%, transparent); }
+  .bouton-io:focus-visible{ outline: 2px solid var(--laiton-clair); outline-offset: 2px; }
+
+  /* ========================================================================
+     Persistance : avertissement de quota, panneau d'import
+     ======================================================================== */
+
+  .avertissement-stockage{
+    max-width: 1120px;
+    margin: 0 auto 14px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: color-mix(in srgb, var(--signet) 18%, var(--papier-creux));
+    border: 1px solid var(--signet);
+    border-radius: 4px;
+    font-family: var(--police-ui);
+    font-size: 12.5px;
+    color: var(--encre);
+  }
+  .avertissement-stockage[hidden]{ display: none; }
+  .avertissement-stockage button{
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--encre);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .voile-import{
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(4,2,1,.75);
+  }
+  .voile-import[hidden]{ display: none; }
+
+  .panneau-import{
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 71;
+    width: min(440px, 92vw);
+    background: var(--papier);
+    color: var(--encre);
+    border-radius: 6px;
+    padding: 26px 28px;
+    box-shadow: 0 30px 60px rgba(0,0,0,.6);
+    font-family: var(--police-ui);
+  }
+  .panneau-import[hidden]{ display: none; }
+  .panneau-import h2{
+    font-family: var(--police-texte);
+    margin: 0 0 10px;
+    font-size: 19px;
+  }
+  .panneau-import p{ font-size: 13px; margin: 0 0 18px; }
+  .actions-import{ display: flex; flex-direction: column; gap: 8px; }
+  .actions-import[hidden]{ display: none; }
+  .actions-import button{
+    font-family: var(--police-ui);
+    font-size: 13px;
+    padding: 9px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  #import-remplacer{
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton));
+    border: 1px solid var(--laiton-fonce);
+    color: var(--encre);
+  }
+  #import-ajouter{
+    background: none;
+    border: 1px solid var(--encre);
+    color: var(--encre);
+  }
+  #import-annuler{
+    background: none;
+    border: 1px solid var(--encre-pale);
+    color: var(--encre-pale);
+  }
+
+  .voile-ajout{
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: rgba(4,2,1,.75);
+    opacity: 0;
+    animation: apparition-voile .2s ease forwards;
+  }
+  .voile-ajout[hidden]{ display: none; }
+  @keyframes apparition-voile{ to{ opacity: 1; } }
+
+  .panneau-ajout{
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 66;
+    width: min(560px, 92vw);
+    max-height: 84vh;
+    overflow-y: auto;
+    background: var(--papier);
+    color: var(--encre);
+    border-radius: 6px;
+    padding: 30px 30px 22px;
+    box-shadow: 0 30px 60px rgba(0,0,0,.6);
+    font-family: var(--police-ui);
+  }
+  .panneau-ajout[hidden]{ display: none; }
+  .panneau-ajout h2{
+    font-family: var(--police-texte);
+    margin: 0 0 6px;
+    font-size: 22px;
+  }
+  .aide-ajout{
+    font-size: 12.5px;
+    color: var(--encre-pale);
+    margin: 0 0 14px;
+  }
+
+  .fermer-ajout{
+    position: absolute;
+    top: -14px;
+    right: -14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton) 50%, var(--laiton-fonce));
+    border: 1px solid var(--laiton-fonce);
+    color: var(--encre);
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,.5);
+  }
+  .fermer-ajout:focus-visible{ outline: 2px solid var(--laiton-clair); outline-offset: 2px; }
+
+  #zone-titres{
+    width: 100%;
+    font-family: var(--police-ui);
+    font-size: 13px;
+    padding: 10px 12px;
+    border: 1px solid var(--encre-pale);
+    border-radius: 4px;
+    background: var(--papier-creux);
+    color: var(--encre);
+    resize: vertical;
+  }
+  .actions-ajout{ margin: 10px 0 16px; }
+  #lancer-recherche{
+    font-family: var(--police-ui);
+    font-size: 13px;
+    padding: 8px 16px;
+    background: linear-gradient(180deg, var(--laiton-clair), var(--laiton) 60%, var(--laiton-fonce));
+    border: 1px solid var(--laiton-fonce);
+    border-radius: 4px;
+    color: var(--encre);
+    cursor: pointer;
+  }
+  #lancer-recherche:hover{ filter: brightness(1.06); }
+
+  .ligne-resultat{
+    padding: 10px 0;
+    border-top: 1px solid var(--papier-creux);
+  }
+  .ligne-resultat:first-child{ border-top: none; }
+  .ligne-entete{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .ligne-etat{
+    font-size: 11.5px;
+    color: var(--encre-pale);
+  }
+  .candidats{
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .candidat{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    padding: 6px 10px;
+    border: 1px solid var(--encre-pale);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+    font-family: var(--police-ui);
+  }
+  .candidat:hover{ background: var(--papier-creux); }
+  .candidat-vignette{
+    width: 30px;
+    height: 42px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--papier-creux);
+  }
+  .candidat-vignette-vide{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--encre-pale);
+  }
+  .candidat-info{ display: flex; flex-direction: column; gap: 2px; }
+  .candidat-titre{ font-size: 12.5px; font-weight: 600; }
+  .candidat-auteur{ font-size: 11px; color: var(--encre-pale); }
+  .candidat-vide{
+    justify-content: center;
+    border-style: dashed;
+    color: var(--encre-pale);
+    font-size: 12px;
+  }
+
+  .bandeau-reseau{
+    margin: 4px 0 16px;
+    padding: 12px 14px;
+    background: color-mix(in srgb, var(--signet) 12%, var(--papier-creux));
+    border: 1px solid var(--signet);
+    border-radius: 4px;
+    font-size: 12.5px;
+  }
+  .bandeau-reseau[hidden]{ display: none; }
+  .bandeau-message{ margin: 0 0 6px; font-weight: 600; }
+  .bandeau-detail summary{ cursor: pointer; color: var(--encre-pale); }
+  .bandeau-detail p{ margin: 6px 0; }
+  .bandeau-rappel{ font-style: italic; opacity: .8; }
+  .bouton-reessayer{
+    margin-top: 8px;
+    font-family: var(--police-ui);
+    font-size: 12px;
+    padding: 6px 12px;
+    background: none;
+    border: 1px solid var(--encre);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="bandeau">
+    <div class="segmente" id="segmente-mode" role="group" aria-label="Organiser l'étagère par">
+      <button type="button" data-mode="theme" aria-pressed="true">Thème</button>
+      <button type="button" data-mode="lecture" aria-pressed="false">Lecture</button>
+      <button type="button" data-mode="liseuse" aria-pressed="false">Liseuse</button>
+    </div>
+    <div class="recherche">
+      <input type="search" id="recherche-livres" placeholder="Titre, auteur, thème…" aria-label="Rechercher un livre">
+    </div>
+    <button type="button" class="bouton-ajouter" id="bouton-ouvrir-ajout">+ Ajouter des livres</button>
+    <button type="button" class="bouton-io" id="bouton-exporter">Exporter</button>
+    <button type="button" class="bouton-io" id="bouton-importer">Importer</button>
+    <input type="file" id="entree-import" accept="application/json" hidden>
+    <span class="etat-couvertures" id="etat-couvertures" aria-live="polite" hidden></span>
+    <div class="compteurs" id="compteurs" aria-live="polite"></div>
+  </div>
+  <p class="aucun-resultat" id="aucun-resultat" hidden>Aucun livre ne correspond à cette recherche.</p>
+
+  <div class="avertissement-stockage" id="avertissement-stockage" role="alert" hidden>
+    <span>Le stockage local est plein : tes dernières modifications ne seront pas conservées après fermeture de la page. <strong>Exporte ta bibliothèque</strong> pour ne rien perdre.</span>
+    <button type="button" id="fermer-avertissement-stockage" aria-label="Fermer cet avertissement">✕</button>
+  </div>
+
+  <div class="voile-import" id="voile-import" hidden></div>
+  <div class="panneau-import" id="panneau-import" role="dialog" aria-modal="true" aria-label="Importer une bibliothèque" tabindex="-1" hidden>
+    <h2>Importer une bibliothèque</h2>
+    <p id="resume-import"></p>
+    <div class="actions-import" id="actions-import">
+      <button type="button" id="import-remplacer">Remplacer la bibliothèque actuelle</button>
+      <button type="button" id="import-ajouter">Ajouter à la suite</button>
+      <button type="button" id="import-annuler">Annuler</button>
+    </div>
+  </div>
+
+  <div class="voile-ajout" id="voile-ajout" hidden></div>
+  <div class="panneau-ajout" id="panneau-ajout" role="dialog" aria-modal="true" aria-label="Ajouter des livres" tabindex="-1" hidden>
+    <button type="button" class="fermer-ajout" id="fermer-ajout" aria-label="Fermer">✕</button>
+    <h2>Ajouter des livres</h2>
+    <p class="aide-ajout">Un titre par ligne — chaque ligne est cherchée sur Open Library.</p>
+    <textarea id="zone-titres" rows="4" placeholder="Le Nom du vent&#10;Fondation&#10;L'Odyssée"></textarea>
+    <div class="actions-ajout">
+      <button type="button" id="lancer-recherche">Rechercher</button>
+    </div>
+    <div class="bandeau-reseau" id="bandeau-reseau" hidden></div>
+    <div class="resultats-ajout" id="resultats-ajout"></div>
+  </div>
+
+  <div class="meuble" id="meuble">
+    <div class="corniche" aria-hidden="true"></div>
+    <div class="corps-meuble">
+      <div class="montant" aria-hidden="true"></div>
+      <div class="rayons" id="rayons"></div>
+      <div class="montant" aria-hidden="true"></div>
+    </div>
+    <div class="plinthe" aria-hidden="true"></div>
+    <div class="halo" aria-hidden="true"></div>
+  </div>
+</div>
+
+<div class="voile" id="voile" hidden></div>
+<div class="scene-livre" id="scene-livre" hidden>
+  <div class="livre-ouvert" id="livre-ouvert" role="dialog" aria-modal="true" aria-label="Détails du livre" tabindex="-1">
+    <button type="button" class="fermer-livre" id="fermer-livre" aria-label="Fermer le livre">✕</button>
+
+    <div class="page page-gauche">
+      <div class="tranche-pages tranche-pages-gauche" aria-hidden="true"></div>
+
+      <div class="couverture" id="couverture-zone">
+        <div class="couverture-generee" id="couverture-generee">
+          <span class="fleuron" aria-hidden="true">❧</span>
+          <span class="couv-titre" id="couv-titre"></span>
+          <span class="couv-filet" aria-hidden="true"></span>
+          <span class="couv-auteur" id="couv-auteur"></span>
+          <span class="couv-annee" id="couv-annee"></span>
+        </div>
+        <img class="couverture-image" id="couverture-image" alt="" hidden>
+      </div>
+
+      <h2 class="titre-livre" id="titre-livre" contenteditable="true" data-vide="Titre du livre"></h2>
+      <p class="auteur-livre" id="auteur-livre" contenteditable="true" data-vide="Auteur"></p>
+      <div class="meta-livre">
+        <span id="annee-livre" contenteditable="true" data-vide="Année"></span>
+        <span id="serie-livre" contenteditable="true" data-vide="Série (facultatif)"></span>
+      </div>
+
+      <div class="palette-reliure" id="palette-reliure" role="group" aria-label="Couleur de la reliure"></div>
+
+      <div class="boutons-couverture" id="boutons-couverture">
+        <button type="button" data-action="choisir-fichier">Choisir une image</button>
+        <button type="button" data-action="chercher-en-ligne">Chercher en ligne</button>
+        <button type="button" data-action="coller-adresse">Coller une adresse</button>
+      </div>
+      <input type="file" id="entree-fichier-couverture" accept="image/*" hidden>
+
+      <div class="collage-url" id="collage-url" hidden>
+        <input type="url" id="champ-url-couverture" placeholder="https://…">
+        <div class="collage-url-actions">
+          <button type="button" data-action="valider-url">Utiliser cette image</button>
+          <button type="button" data-action="annuler-url">Annuler</button>
+        </div>
+      </div>
+
+      <div class="resultats-couverture" id="resultats-couverture" hidden></div>
+    </div>
+
+    <div class="reliure-centrale" aria-hidden="true">
+      <div class="tranchefile tranchefile-haut"></div>
+      <div class="tranchefile tranchefile-bas"></div>
+      <div class="ruban-lu" id="ruban-lu"></div>
+    </div>
+
+    <div class="page page-droite">
+      <div class="tranche-pages tranche-pages-droite" aria-hidden="true"></div>
+
+      <div class="entete-droite">
+        <span class="rayon-badge" id="rayon-badge"></span>
+      </div>
+
+      <div class="resume-livre" id="resume-livre" contenteditable="true" data-vide="Résumé du livre..."></div>
+      <div class="filet-resume" aria-hidden="true"></div>
+
+      <div class="themes-livre" id="themes-livre"></div>
+
+      <div class="segmente" id="segmente-statut" role="group" aria-label="Statut de lecture"></div>
+
+      <div class="ligne-controles">
+        <button type="button" class="interrupteur" id="interrupteur-telecharge" role="switch" aria-checked="false">
+          <span class="rail" aria-hidden="true"></span>
+          <span>Sur la liseuse</span>
+        </button>
+      </div>
+
+      <div class="bloc-note">
+        <div class="note-livre" id="note-livre" contenteditable="true" data-vide="Note personnelle..."></div>
+      </div>
+
+      <div class="actions-livre" id="actions-livre"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   Modèle de données
+   ========================================================================== */
+
+// Rayons possibles, dans l'ordre d'affichage.
+const RAYONS = [
+  "Fantasy",
+  "Science-fiction",
+  "Romance",
+  "Thriller & polar",
+  "Littérature",
+  "Mythes & Antiquité",
+  "Essais & récits",
+  "BD & manga",
+  "Autres",
+];
+
+// Statuts de lecture possibles.
+const STATUTS = ["à lire", "en cours", "lu", "abandonné"];
+
+// Palette des reliures (une douzaine), attribuée par hachage du titre.
+const RELIURES = [
+  "#1f4d3a", // vert empire
+  "#6e1f2a", // bordeaux
+  "#22304f", // encre
+  "#4a2545", // prune
+  "#8a6a1f", // laiton
+  "#2c2116", // brun très sombre
+  "#3a1f1f", // acajou
+  "#1a2f2b", // sapin
+  "#2a2a3d", // bleu nuit
+  "#5c2f0e", // roux cuir
+  "#33261a", // noisette sombre
+  "#0f2f3a", // pétrole
+];
+
+/**
+ * Fabrique un livre à partir de champs partiels : complète les valeurs
+ * par défaut communes (note, couverture, drapeaux) pour que chaque entrée
+ * du jeu de départ ne répète pas ces champs.
+ */
+function creerLivre(champs) {
+  return {
+    id: champs.id,
+    titre: champs.titre,
+    auteur: champs.auteur,
+    annee: champs.annee ?? null,
+    serie: champs.serie ?? "",
+    statut: champs.statut,
+    telecharge: champs.telecharge ?? false,
+    rayon: champs.rayon,
+    themes: champs.themes,
+    resume: champs.resume,
+    couverture: champs.couverture ?? "",
+    couvCherchee: champs.couvCherchee ?? false,
+    note: champs.note ?? "",
+    couleur: champs.couleur,
+    ordre: champs.ordre,
+  };
+}
+
+// Jeu de départ : 12 livres réels, répartis sur les 9 rayons et les 4 statuts.
+// Résumés écrits dans l'esprit d'une quatrième de couverture, sans jamais
+// dévoiler la fin ni le contenu d'une suite.
+const LIVRES_INITIAUX = [
+  creerLivre({
+    id: "livre-01",
+    titre: "Le Nom du vent",
+    auteur: "Patrick Rothfuss",
+    annee: 2007,
+    serie: "Chronique du tueur de roi, livre 1",
+    statut: "à lire",
+    telecharge: true,
+    rayon: "Fantasy",
+    themes: ["magie", "musique", "apprentissage"],
+    resume: "Dans une auberge isolée, un homme qui se fait appeler Kvothe accepte enfin de raconter sa véritable histoire à un chroniqueur de passage. De son enfance chez les artistes itinérants aux couloirs d'une université où l'on étudie la magie comme une science, il retrace les débuts d'une légende que tout le monde connaît déjà, mais que personne n'a jamais entendue de sa bouche.",
+    couleur: RELIURES[0],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-02",
+    titre: "La Communauté de l'anneau",
+    auteur: "J.R.R. Tolkien",
+    annee: 1954,
+    serie: "Le Seigneur des anneaux, livre 1",
+    statut: "lu",
+    telecharge: true,
+    rayon: "Fantasy",
+    themes: ["quête", "amitié", "pouvoir"],
+    resume: "Un anneau oublié refait surface entre les mains d'un modeste habitant de la Comté. Pour échapper aux forces qui le traquent, Frodon quitte son pays natal en compagnie de quelques fidèles, sans savoir encore jusqu'où ce voyage les mènera ni combien il leur en coûtera.",
+    couleur: RELIURES[1],
+    ordre: 1,
+  }),
+  creerLivre({
+    id: "livre-03",
+    titre: "Dune",
+    auteur: "Frank Herbert",
+    annee: 1965,
+    serie: "Le Cycle de Dune, livre 1",
+    statut: "en cours",
+    telecharge: false,
+    rayon: "Science-fiction",
+    themes: ["politique", "désert", "prophétie"],
+    resume: "Sur Arrakis, planète désertique convoitée pour son épice rarissime, le jeune Paul Atréides voit sa famille prise dans un jeu de pouvoir qui la dépasse. Entre les tribus du désert, les intrigues impériales et une prophétie dont il ne mesure pas encore le poids, il va devoir apprendre vite.",
+    couleur: RELIURES[4],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-04",
+    titre: "Orgueil et Préjugés",
+    auteur: "Jane Austen",
+    annee: 1813,
+    serie: "",
+    statut: "lu",
+    telecharge: true,
+    rayon: "Romance",
+    themes: ["société", "malentendus", "ironie"],
+    resume: "Dans la campagne anglaise du début du XIXe siècle, Elizabeth Bennet croise la route de l'énigmatique Mr Darcy. Entre premières impressions trompeuses, fierté mal placée et sens de l'observation aiguisé, leur relation s'annonce aussi tendue que savoureuse.",
+    couleur: RELIURES[3],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-05",
+    titre: "Ils étaient dix",
+    auteur: "Agatha Christie",
+    annee: 1939,
+    serie: "",
+    statut: "lu",
+    telecharge: false,
+    rayon: "Thriller & polar",
+    themes: ["huis clos", "enquête", "île"],
+    resume: "Dix inconnus sont invités sur une île isolée par un hôte qui ne se montre jamais. Très vite, une comptine macabre affichée dans le salon semble annoncer leur sort, un par un. Coupés du monde, ils comprennent que l'assassin qu'ils cherchent se trouve forcément parmi eux.",
+    couleur: RELIURES[2],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-06",
+    titre: "Le Silence des agneaux",
+    auteur: "Thomas Harris",
+    annee: 1988,
+    serie: "",
+    statut: "à lire",
+    telecharge: false,
+    rayon: "Thriller & polar",
+    themes: ["enquête", "psychologie", "peur"],
+    resume: "Pour traquer un tueur en série qui échappe au FBI, une jeune recrue est chargée d'interroger un psychiatre brillant et manipulateur, interné pour des crimes tout aussi effroyables. Entre les deux, un dialogue glaçant s'installe, où chaque information se paie très cher.",
+    couleur: RELIURES[6],
+    ordre: 1,
+  }),
+  creerLivre({
+    id: "livre-07",
+    titre: "Le Comte de Monte-Cristo",
+    auteur: "Alexandre Dumas",
+    annee: 1844,
+    serie: "",
+    statut: "en cours",
+    telecharge: true,
+    rayon: "Littérature",
+    themes: ["vengeance", "injustice", "évasion"],
+    resume: "Jeune marin promis à un bel avenir, Edmond Dantès est dénoncé à tort et jeté dans les cachots du château d'If. Des années durant, il n'a d'autre compagnie que celle d'un vieux prisonnier qui lui enseigne tout ce qu'un homme peut apprendre, et lui glisse l'idée d'un trésor caché.",
+    couleur: RELIURES[9],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-08",
+    titre: "L'Étranger",
+    auteur: "Albert Camus",
+    annee: 1942,
+    serie: "",
+    statut: "abandonné",
+    telecharge: true,
+    rayon: "Littérature",
+    themes: ["absurde", "indifférence", "Algérie"],
+    resume: "À Alger, Meursault mène sa vie avec un détachement qui déconcerte tous ceux qui l'entourent, de l'enterrement de sa mère à une amitié encombrante avec un voisin trouble. Un dimanche de chaleur écrasante, un geste irréversible va faire basculer son existence.",
+    couleur: RELIURES[5],
+    ordre: 1,
+  }),
+  creerLivre({
+    id: "livre-09",
+    titre: "L'Odyssée",
+    auteur: "Homère",
+    annee: null,
+    serie: "",
+    statut: "à lire",
+    telecharge: false,
+    rayon: "Mythes & Antiquité",
+    themes: ["voyage", "dieux", "ruse"],
+    resume: "La guerre de Troie est finie, mais pour Ulysse, roi d'Ithaque, le plus long des voyages commence à peine. Tempêtes, îles enchantées, créatures monstrueuses et colère des dieux vont retarder son retour, tandis que chez lui, sa femme Pénélope tient tête à ceux qui convoitent son royaume.",
+    couleur: RELIURES[11],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-10",
+    titre: "Sapiens : Une brève histoire de l'humanité",
+    auteur: "Yuval Noah Harari",
+    annee: 2011,
+    serie: "",
+    statut: "en cours",
+    telecharge: true,
+    rayon: "Essais & récits",
+    themes: ["histoire", "société", "évolution"],
+    resume: "Comment un primate parmi d'autres, sans force ni vitesse particulières, en est-il venu à dominer la planète entière ? Cet essai retrace le parcours de l'espèce humaine depuis ses origines africaines, à travers les révolutions cognitive, agricole puis scientifique qui ont façonné notre monde.",
+    couleur: RELIURES[8],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-11",
+    titre: "Watchmen",
+    auteur: "Alan Moore",
+    annee: 1987,
+    serie: "",
+    statut: "lu",
+    telecharge: false,
+    rayon: "BD & manga",
+    themes: ["super-héros", "guerre froide", "morale"],
+    resume: "Dans une Amérique alternative où d'anciens justiciers masqués ont été mis hors-la-loi, le meurtre brutal de l'un d'eux pousse ses anciens collègues à rouvrir de vieux dossiers. Leur enquête réveille des secrets que certains auraient préféré voir rester enterrés.",
+    couleur: RELIURES[7],
+    ordre: 0,
+  }),
+  creerLivre({
+    id: "livre-12",
+    titre: "L'Art de la guerre",
+    auteur: "Sun Tzu",
+    annee: null,
+    serie: "",
+    statut: "à lire",
+    telecharge: false,
+    rayon: "Autres",
+    themes: ["stratégie", "philosophie", "conflit"],
+    resume: "Rédigé il y a plus de deux mille ans, ce traité rassemble en courts chapitres des préceptes sur l'art de mener une armée, de choisir son terrain et de déjouer son adversaire par la ruse plutôt que par la seule force. Son influence dépasse largement le champ militaire.",
+    couleur: RELIURES[10],
+    ordre: 0,
+  }),
+];
+
+/* ==========================================================================
+   Persistance : localStorage sous une clé versionnée
+   ========================================================================== */
+
+const CLE_STOCKAGE = "bibliotheque-v1";
+
+// Redonne à chaque livre une forme complète (creerLivre comble les champs
+// manquants), pour rester robuste à un stockage partiel ou plus ancien.
+function normaliserLivreCharge(champs) {
+  return creerLivre({
+    id: champs.id,
+    titre: champs.titre || "Sans titre",
+    auteur: champs.auteur || "",
+    annee: champs.annee,
+    serie: champs.serie,
+    statut: STATUTS.includes(champs.statut) ? champs.statut : "à lire",
+    telecharge: champs.telecharge,
+    rayon: RAYONS.includes(champs.rayon) ? champs.rayon : "Autres",
+    themes: Array.isArray(champs.themes) ? champs.themes.slice(0, 4) : [],
+    resume: champs.resume || "",
+    couverture: champs.couverture,
+    couvCherchee: champs.couvCherchee,
+    note: champs.note,
+    couleur: champs.couleur || RELIURES[0],
+    ordre: typeof champs.ordre === "number" ? champs.ordre : 0,
+  });
+}
+
+function chargerLocalStorage() {
+  try {
+    const brut = localStorage.getItem(CLE_STOCKAGE);
+    if (!brut) return null;
+    const donnees = JSON.parse(brut);
+    if (!donnees || !Array.isArray(donnees.livres)) return null;
+    return donnees.livres.map(normaliserLivreCharge);
+  } catch (erreur) {
+    // Stockage corrompu : on repart du jeu de départ plutôt que planter.
+    return null;
+  }
+}
+
+// Enregistre à chaque modification. Si le quota est dépassé (possible avec
+// des couvertures en data-URL), on le dit clairement plutôt que de perdre
+// les changements en silence.
+function sauvegarderLocalStorage() {
+  try {
+    localStorage.setItem(CLE_STOCKAGE, JSON.stringify({ version: 1, livres: etat.livres }));
+    document.getElementById("avertissement-stockage").hidden = true;
+  } catch (erreur) {
+    document.getElementById("avertissement-stockage").hidden = false;
+  }
+}
+
+/* ==========================================================================
+   État de l'application
+   ========================================================================== */
+
+const etat = {
+  livres: chargerLocalStorage() || LIVRES_INITIAUX.slice(),
+  livreOuvertId: null,
+  mode: "theme",
+  recherche: "",
+  idGlisse: null,
+  dernieresLignes: [],
+  resultatsRecherche: [],
+  importEnAttente: null,
+};
+
+/* ==========================================================================
+   Étagère : construction, mesures, clavier
+   ========================================================================== */
+
+// Hachage simple et stable, utilisé pour dériver un bruit reproductible
+// d'une session à l'autre (dimensions des tranches, traitement de dos).
+function hacher(texte) {
+  let h = 0;
+  for (let i = 0; i < texte.length; i++) {
+    h = (h * 31 + texte.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+// Largeur (18-42px) et hauteur (130-190px) d'une tranche : dérivées de la
+// longueur du titre, plus un bruit stable tiré de l'id, pour que l'étagère
+// garde toujours le même rythme.
+function dimensionsTranche(livre) {
+  const h = hacher(livre.id);
+  const bruitL = (h % 97) / 97;
+  const bruitH = (Math.floor(h / 97) % 97) / 97;
+  const largeur = Math.round(18 + Math.min(16, livre.titre.length * 0.45) + bruitL * 8);
+  // La hauteur aussi dépend de la longueur du titre (en plus du bruit) :
+  // un titre long a besoin d'une tranche plus haute pour tenir en entier.
+  const hauteur = Math.round(130 + Math.min(45, livre.titre.length * 1.3) + bruitH * 15);
+  return {
+    largeur: Math.min(42, Math.max(18, largeur)),
+    hauteur: Math.min(190, Math.max(130, hauteur)),
+  };
+}
+
+// Traitement de dos, réparti par hachage de l'id (nu / pièce de titre / nerfs).
+function traitementDos(livre) {
+  const h = hacher(livre.id + "-dos");
+  return ["nu", "piece", "nerfs"][h % 3];
+}
+
+// Angle d'inclinaison stable (6 à 8°) pour un dernier livre de rayon.
+function angleInclinaison(livre) {
+  const h = hacher(livre.id + "-angle");
+  return 6 + (h % 3); // 6, 7 ou 8
+}
+
+// Les trois façons d'organiser l'étagère : par rayon (thème), par statut
+// de lecture, ou selon que le livre est sur la liseuse.
+function groupesPourMode(mode) {
+  if (mode === "lecture") return STATUTS.map((s) => ({ cle: s, libelle: s }));
+  if (mode === "liseuse") return [
+    { cle: "liseuse", libelle: "Sur la liseuse" },
+    { cle: "telecharger", libelle: "À télécharger" },
+  ];
+  return RAYONS.map((r) => ({ cle: r, libelle: r }));
+}
+
+function champGroupe(livre, mode) {
+  if (mode === "lecture") return livre.statut;
+  if (mode === "liseuse") return livre.telecharge ? "liseuse" : "telecharger";
+  return livre.rayon;
+}
+
+function affecterGroupe(livre, mode, cle) {
+  if (mode === "lecture") livre.statut = cle;
+  else if (mode === "liseuse") livre.telecharge = cle === "liseuse";
+  else livre.rayon = cle;
+}
+
+function livresDuGroupe(cle, mode) {
+  return etat.livres
+    .filter((l) => champGroupe(l, mode) === cle)
+    .sort((a, b) => a.ordre - b.ordre);
+}
+
+// Mesure exacte (canvas) de la largeur d'un texte pour une police donnée :
+// bien plus fiable qu'une estimation au nombre de caractères.
+let contexteMesureTexte = null;
+function mesurerLargeurTexte(texte, police) {
+  if (!contexteMesureTexte) contexteMesureTexte = document.createElement("canvas").getContext("2d");
+  contexteMesureTexte.font = police;
+  return contexteMesureTexte.measureText(texte).width;
+}
+
+// Réduit la taille de police jusqu'à ce que le texte tienne entièrement
+// dans l'espace disponible, pour ne jamais tronquer titre ou auteur sur
+// la tranche (l'ellipse en CSS ne reste qu'un filet de sécurité).
+function ajusterTexteVertical(texte, longueurDisponiblePx, famillePolice, tailleMax, tailleMin) {
+  // Marge de sécurité : la mesure canvas ne reproduit pas exactement
+  // l'arrondi sous-pixel du rendu réel, mieux vaut viser un peu court.
+  const budget = longueurDisponiblePx * 0.92;
+  let taille = tailleMax;
+  while (taille > tailleMin) {
+    if (mesurerLargeurTexte(texte, "600 " + taille + "px " + famillePolice) <= budget) break;
+    taille -= 0.5;
+  }
+  return Math.max(tailleMin, taille);
+}
+
+function creerTrancheDOM(livre) {
+  const { largeur, hauteur: hauteurBase } = dimensionsTranche(livre);
+  const dos = traitementDos(livre);
+  const policeTitre = "Literata, Georgia, serif";
+
+  const policeAuteur = "Inter, Arial, sans-serif";
+  const zoneAuteurPx = 60;
+  const reserveTitre = 94; // 16 (haut) + 60 (zone auteur) + 8 (marge) + 10 (bas)
+  let hauteur = hauteurBase;
+  const tailleTitre = ajusterTexteVertical(livre.titre, hauteur - reserveTitre, policeTitre, 12, 6);
+  const tailleAuteur = ajusterTexteVertical(livre.auteur, zoneAuteurPx, policeAuteur, 10, 6.5);
+  // Cas extrême (titre très long) : même à la taille minimale il ne tient
+  // pas dans les 190px habituels. Plutôt que de le tronquer, on autorise
+  // exceptionnellement cette tranche à dépasser la hauteur normale (la
+  // zone auteur, elle, a une largeur fixe : ce n'est pas elle qui en profite).
+  const largeurTitreMesuree = mesurerLargeurTexte(livre.titre, "600 " + tailleTitre + "px " + policeTitre);
+  if (largeurTitreMesuree > (hauteur - reserveTitre) * 0.92) {
+    hauteur = Math.min(230, Math.round(largeurTitreMesuree / 0.92) + reserveTitre);
+  }
+
+  const bouton = document.createElement("button");
+  bouton.type = "button";
+  bouton.className = "tranche dos-" + dos;
+  if (!livre.telecharge) bouton.classList.add("pas-telecharge");
+  if (livre.statut === "lu") bouton.classList.add("lu");
+  bouton.draggable = true;
+  bouton.dataset.id = livre.id;
+  bouton.style.setProperty("--w", largeur + "px");
+  bouton.style.setProperty("--h", hauteur + "px");
+  bouton.style.setProperty("--couleur", livre.couleur);
+  bouton.style.setProperty("--taille-titre", tailleTitre + "px");
+  bouton.style.setProperty("--taille-auteur", tailleAuteur + "px");
+  bouton.setAttribute("aria-label", livre.titre + ", " + livre.auteur);
+
+  let interieur = "";
+  interieur += '<span class="filet filet-haut" aria-hidden="true"></span>';
+  interieur += '<span class="filet filet-bas" aria-hidden="true"></span>';
+  if (dos === "nerfs") {
+    interieur += '<span class="nerf nerf-haut" aria-hidden="true"></span>';
+    interieur += '<span class="nerf nerf-bas" aria-hidden="true"></span>';
+  }
+  interieur += '<span class="zone-titre">' + echapper(livre.titre) + '</span>';
+  interieur += '<span class="zone-auteur">' + echapper(livre.auteur) + '</span>';
+  if (livre.statut === "lu") {
+    interieur += '<span class="signet" aria-hidden="true"></span>';
+  }
+  interieur += construireInfobulle(livre);
+
+  bouton.innerHTML = interieur;
+  return bouton;
+}
+
+function construireInfobulle(livre) {
+  // Vignette provisoire : le vrai rendu de couverture générée arrive avec
+  // le livre ouvert ; ici, un aperçu minimal suffit au survol.
+  return (
+    '<span class="infobulle" role="tooltip">' +
+      '<span class="infobulle-vignette" style="--couleur-vignette:' + livre.couleur + '">❧</span>' +
+      '<span class="infobulle-titre">' + echapper(livre.titre) + '</span>' +
+      '<span class="infobulle-auteur">' + echapper(livre.auteur) + '</span>' +
+    '</span>'
+  );
+}
+
+function echapper(texte) {
+  const d = document.createElement("div");
+  d.textContent = texte;
+  return d.innerHTML;
+}
+
+function construireEtagere() {
+  const conteneur = document.getElementById("rayons");
+  conteneur.innerHTML = "";
+
+  groupesPourMode(etat.mode).forEach((groupe) => {
+    const livres = livresDuGroupe(groupe.cle, etat.mode);
+
+    const section = document.createElement("section");
+    section.className = "rayon";
+    section.dataset.groupe = groupe.cle;
+    section.setAttribute("role", "group");
+    section.setAttribute("aria-label", groupe.libelle + ", " + livres.length + " livre" + (livres.length > 1 ? "s" : ""));
+
+    const tranchesEl = document.createElement("div");
+    tranchesEl.className = "tranches";
+
+    livres.forEach((livre) => {
+      tranchesEl.appendChild(creerTrancheDOM(livre));
+    });
+
+    const planche = document.createElement("div");
+    planche.className = "planche";
+    planche.innerHTML =
+      '<div class="planche-arete-haute" aria-hidden="true"></div>' +
+      '<div class="planche-face-sup" aria-hidden="true"></div>' +
+      '<div class="planche-arete-sombre" aria-hidden="true"></div>' +
+      '<div class="planche-chant-avant">' +
+        '<span class="etiquette">' + echapper(groupe.libelle) + ' <span class="compte">' + livres.length + '</span></span>' +
+      '</div>';
+
+    section.appendChild(tranchesEl);
+    section.appendChild(planche);
+    conteneur.appendChild(section);
+  });
+
+  recalculerInclinaisons();
+  appliquerRecherche();
+  mettreAJourCompteurs();
+  sauvegarderLocalStorage();
+}
+
+/* --- Transition FLIP : mémorise les rectangles avant redessin, puis anime
+   chaque tranche de son ancienne place vers la nouvelle, inclinaison comprise. --- */
+function capturerPositions() {
+  const positions = new Map();
+  document.querySelectorAll(".tranche").forEach((el) => {
+    positions.set(el.dataset.id, {
+      rect: el.getBoundingClientRect(),
+      rotation: el.style.getPropertyValue("--rotation") || "0deg",
+    });
+  });
+  return positions;
+}
+
+function rejouerFlip(positionsAvant) {
+  const reduit = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduit) return;
+
+  document.querySelectorAll(".tranche").forEach((el) => {
+    const avant = positionsAvant.get(el.dataset.id);
+    if (!avant) return;
+    const apres = el.getBoundingClientRect();
+    const dx = avant.rect.left - apres.left;
+    const dy = avant.rect.top - apres.top;
+    const rotationArrivee = el.style.getPropertyValue("--rotation") || "0deg";
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && avant.rotation === rotationArrivee) return;
+
+    el.animate(
+      [
+        { transform: "translate(" + dx + "px, " + dy + "px) rotate(" + avant.rotation + ")" },
+        { transform: "translate(0px, 0px) rotate(" + rotationArrivee + ")" },
+      ],
+      { duration: 380, easing: "cubic-bezier(.2,.7,.3,1)" }
+    );
+  });
+}
+
+function reconstruireAvecFlip() {
+  const positionsAvant = capturerPositions();
+  construireEtagere();
+  requestAnimationFrame(() => rejouerFlip(positionsAvant));
+}
+
+// Le dernier livre d'un rayon penche légèrement, mais seulement si la mesure
+// réelle du conteneur montre qu'il reste plus de 48px libres — sinon il
+// resterait droit, coincé contre le livre précédent.
+function recalculerInclinaisons() {
+  document.querySelectorAll(".rayon .tranches").forEach((conteneur) => {
+    const tranches = conteneur.querySelectorAll(".tranche");
+    tranches.forEach((t) => {
+      t.classList.remove("incline");
+      t.style.removeProperty("--angle");
+    });
+    if (tranches.length === 0) return;
+
+    // scrollWidth ne descend jamais sous clientWidth : quand il n'y a pas de
+    // débordement, il vaut exactement clientWidth et ne dit rien de la place
+    // réellement occupée. On additionne donc la largeur réelle des tranches.
+    let largeurOccupee = 0;
+    tranches.forEach((t) => { largeurOccupee += t.getBoundingClientRect().width; });
+    const libre = conteneur.clientWidth - largeurOccupee;
+    if (libre > 48) {
+      const derniere = tranches[tranches.length - 1];
+      const livre = etat.livres.find((l) => l.id === derniere.dataset.id);
+      derniere.classList.add("incline");
+      derniere.style.setProperty("--angle", angleInclinaison(livre) + "deg");
+    }
+  });
+}
+
+let redimensionnementEnCours = null;
+window.addEventListener("resize", () => {
+  clearTimeout(redimensionnementEnCours);
+  redimensionnementEnCours = setTimeout(recalculerInclinaisons, 150);
+});
+
+/* --- Navigation clavier : déléguée sur le conteneur des rayons --- */
+// Gauche/droite : tranche précédente/suivante dans le même rayon.
+// Haut/bas : même position (au mieux) dans le rayon précédent/suivant.
+function initNavigationClavier() {
+  const conteneur = document.getElementById("rayons");
+  conteneur.addEventListener("keydown", (evt) => {
+    const cible = evt.target.closest(".tranche");
+    if (!cible) return;
+
+    const fleches = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+    if (!fleches.includes(evt.key)) return;
+    evt.preventDefault();
+
+    const rayonCourant = cible.closest(".rayon");
+    const tranchesRayon = Array.from(rayonCourant.querySelectorAll(".tranche"));
+    const index = tranchesRayon.indexOf(cible);
+
+    if (evt.key === "ArrowLeft" || evt.key === "ArrowRight") {
+      const suivant = evt.key === "ArrowLeft" ? index - 1 : index + 1;
+      const cibleSuivante = tranchesRayon[suivant];
+      if (cibleSuivante) {
+        cibleSuivante.focus();
+        cibleSuivante.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+      return;
+    }
+
+    // Haut / bas : passe au rayon voisin, en gardant approximativement
+    // la même position parmi ses tranches.
+    const rayonsEl = Array.from(conteneur.querySelectorAll(".rayon"));
+    const indexRayon = rayonsEl.indexOf(rayonCourant);
+    const indexRayonSuivant = evt.key === "ArrowUp" ? indexRayon - 1 : indexRayon + 1;
+    const rayonSuivant = rayonsEl[indexRayonSuivant];
+    if (!rayonSuivant) return;
+    const tranchesVoisines = Array.from(rayonSuivant.querySelectorAll(".tranche"));
+    if (tranchesVoisines.length === 0) return;
+    const cibleVoisine = tranchesVoisines[Math.min(index, tranchesVoisines.length - 1)];
+    cibleVoisine.focus();
+    cibleVoisine.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+}
+
+/* --- Ouverture d'un livre au clic (délégué sur le conteneur) --- */
+function initOuvertureLivre() {
+  document.getElementById("rayons").addEventListener("click", (evt) => {
+    const cible = evt.target.closest(".tranche");
+    if (cible) ouvrirLivre(cible.dataset.id);
+  });
+}
+
+/* ==========================================================================
+   Le livre ouvert
+   ========================================================================== */
+
+// Génère une couverture de repli en CSS pur (encadrement doré, fleuron,
+// titre, filet, auteur, année) : utilisée tant qu'aucune image n'est
+// disponible, et si une image posée échoue à charger.
+function appliquerCouvertureGeneree(livre) {
+  const generee = document.getElementById("couverture-generee");
+  const image = document.getElementById("couverture-image");
+  image.hidden = true;
+  image.removeAttribute("src");
+  generee.hidden = false;
+  generee.style.setProperty("--couleur-couv", livre.couleur);
+  document.getElementById("couv-titre").textContent = livre.titre;
+  document.getElementById("couv-auteur").textContent = livre.auteur;
+  document.getElementById("couv-annee").textContent = livre.annee ?? "";
+}
+
+function appliquerCouverture(livre) {
+  if (!livre.couverture) {
+    appliquerCouvertureGeneree(livre);
+    return;
+  }
+  const generee = document.getElementById("couverture-generee");
+  const image = document.getElementById("couverture-image");
+  image.onerror = () => appliquerCouvertureGeneree(livre);
+  image.src = livre.couverture;
+  image.alt = livre.titre + ", " + livre.auteur;
+  image.hidden = false;
+  generee.hidden = true;
+}
+
+function rendrePalette(livre) {
+  const conteneur = document.getElementById("palette-reliure");
+  conteneur.innerHTML = "";
+  RELIURES.forEach((couleur) => {
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "swatch" + (couleur === livre.couleur ? " actif" : "");
+    bouton.style.background = couleur;
+    bouton.dataset.couleur = couleur;
+    bouton.setAttribute("aria-label", "Couleur de reliure " + couleur);
+    bouton.setAttribute("aria-pressed", couleur === livre.couleur ? "true" : "false");
+    conteneur.appendChild(bouton);
+  });
+}
+
+function rendreThemes(livre) {
+  const conteneur = document.getElementById("themes-livre");
+  conteneur.innerHTML = "";
+  livre.themes.forEach((theme, index) => {
+    const pastille = document.createElement("span");
+    pastille.className = "pastille";
+    pastille.textContent = theme;
+    const retirer = document.createElement("button");
+    retirer.type = "button";
+    retirer.textContent = "×";
+    retirer.dataset.action = "retirer-theme";
+    retirer.dataset.index = String(index);
+    retirer.setAttribute("aria-label", "Retirer le thème " + theme);
+    pastille.appendChild(retirer);
+    conteneur.appendChild(pastille);
+  });
+  if (livre.themes.length < 4) {
+    const ajouter = document.createElement("button");
+    ajouter.type = "button";
+    ajouter.className = "ajouter-theme";
+    ajouter.dataset.action = "ouvrir-ajout-theme";
+    ajouter.textContent = "+";
+    ajouter.setAttribute("aria-label", "Ajouter un thème");
+    conteneur.appendChild(ajouter);
+  }
+}
+
+function ouvrirChampAjoutTheme() {
+  const conteneur = document.getElementById("themes-livre");
+  const bouton = conteneur.querySelector('[data-action="ouvrir-ajout-theme"]');
+  if (!bouton) return;
+
+  const champ = document.createElement("input");
+  champ.type = "text";
+  champ.className = "champ-theme";
+  champ.maxLength = 24;
+  champ.setAttribute("aria-label", "Nouveau thème");
+  bouton.replaceWith(champ);
+  champ.focus();
+
+  // Entrée déclenche la validation puis blur() le champ, ce qui redéclenche
+  // l'écouteur "blur" ci-dessous : un verrou évite d'ajouter le thème deux fois.
+  let valide = false;
+  const valider = () => {
+    if (valide) return;
+    valide = true;
+    const livre = livreCourant();
+    if (!livre) return;
+    const valeur = champ.value.trim();
+    if (valeur && livre.themes.length < 4) {
+      livre.themes.push(valeur);
+    }
+    rendreThemes(livre);
+    sauvegarderLocalStorage();
+  };
+
+  champ.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter") { evt.preventDefault(); valider(); }
+    if (evt.key === "Escape") { evt.preventDefault(); valide = true; rendreThemes(livreCourant()); }
+  });
+  champ.addEventListener("blur", valider);
+}
+
+function rendreSegmenteStatut(livre) {
+  const conteneur = document.getElementById("segmente-statut");
+  conteneur.innerHTML = "";
+  STATUTS.forEach((statut) => {
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.textContent = statut;
+    bouton.dataset.statut = statut;
+    bouton.setAttribute("aria-pressed", statut === livre.statut ? "true" : "false");
+    conteneur.appendChild(bouton);
+  });
+}
+
+function rendreActions() {
+  const conteneur = document.getElementById("actions-livre");
+  conteneur.innerHTML = '<button type="button" class="retirer-livre" data-action="demander-suppression">Retirer de la bibliothèque</button>';
+}
+
+function rendreRuban(livre) {
+  document.getElementById("ruban-lu").classList.toggle("visible", livre.statut === "lu");
+}
+
+function livreCourant() {
+  if (!etat.livreOuvertId) return null;
+  return etat.livres.find((l) => l.id === etat.livreOuvertId) || null;
+}
+
+// Remplit le livre ouvert avec les données du livre : ne pose aucun
+// écouteur (ils sont posés une seule fois, à l'initialisation).
+function remplirLivreOuvert(livre) {
+  document.getElementById("titre-livre").textContent = livre.titre;
+  document.getElementById("auteur-livre").textContent = livre.auteur;
+  document.getElementById("annee-livre").textContent = livre.annee != null ? String(livre.annee) : "";
+  document.getElementById("serie-livre").textContent = livre.serie || "";
+  document.getElementById("resume-livre").textContent = livre.resume || "";
+  document.getElementById("note-livre").textContent = livre.note || "";
+  document.getElementById("rayon-badge").textContent = livre.rayon;
+
+  appliquerCouverture(livre);
+  rendrePalette(livre);
+  rendreThemes(livre);
+  rendreSegmenteStatut(livre);
+  rendreActions();
+  rendreRuban(livre);
+
+  const interrupteur = document.getElementById("interrupteur-telecharge");
+  interrupteur.setAttribute("aria-checked", livre.telecharge ? "true" : "false");
+}
+
+// Insère du texte brut à l'endroit du curseur (le collage est intercepté
+// pour ne jamais introduire de mise en forme).
+function insererTexteALaSelection(texte) {
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+  const plage = selection.getRangeAt(0);
+  plage.deleteContents();
+  const noeud = document.createTextNode(texte);
+  plage.insertNode(noeud);
+  plage.setStartAfter(noeud);
+  plage.setEndAfter(noeud);
+  selection.removeAllRanges();
+  selection.addRange(plage);
+}
+
+// Rend un champ éditable en place : collage en texte brut, et pour un
+// champ d'une seule ligne, Entrée en sort au lieu d'insérer un saut de ligne.
+function rendreEditable(el, { uneLigne = true, onValider } = {}) {
+  el.addEventListener("paste", (evt) => {
+    evt.preventDefault();
+    const texte = (evt.clipboardData || window.clipboardData).getData("text/plain");
+    insererTexteALaSelection(texte);
+  });
+  if (uneLigne) {
+    el.addEventListener("keydown", (evt) => {
+      if (evt.key === "Enter") { evt.preventDefault(); el.blur(); }
+    });
+  }
+  el.addEventListener("blur", () => {
+    if (el.textContent.trim() === "") el.textContent = "";
+    onValider(el.textContent.trim());
+    sauvegarderLocalStorage();
+  });
+}
+
+function initChampsEditables() {
+  rendreEditable(document.getElementById("titre-livre"), {
+    onValider: (valeur) => {
+      const livre = livreCourant();
+      if (livre) { livre.titre = valeur; document.getElementById("couv-titre").textContent = valeur; }
+    },
+  });
+  rendreEditable(document.getElementById("auteur-livre"), {
+    onValider: (valeur) => {
+      const livre = livreCourant();
+      if (livre) { livre.auteur = valeur; document.getElementById("couv-auteur").textContent = valeur; }
+    },
+  });
+  rendreEditable(document.getElementById("annee-livre"), {
+    onValider: (valeur) => {
+      const livre = livreCourant();
+      if (!livre) return;
+      const nombre = parseInt(valeur, 10);
+      livre.annee = Number.isFinite(nombre) ? nombre : null;
+      document.getElementById("couv-annee").textContent = livre.annee ?? "";
+    },
+  });
+  rendreEditable(document.getElementById("serie-livre"), {
+    onValider: (valeur) => {
+      const livre = livreCourant();
+      if (livre) livre.serie = valeur;
+    },
+  });
+  rendreEditable(document.getElementById("resume-livre"), {
+    uneLigne: false,
+    onValider: (valeur) => {
+      const livre = livreCourant();
+      if (livre) livre.resume = valeur;
+    },
+  });
+  rendreEditable(document.getElementById("note-livre"), {
+    uneLigne: false,
+    onValider: (valeur) => {
+      const livre = livreCourant();
+      if (livre) livre.note = valeur;
+    },
+  });
+}
+
+// Un seul écouteur délégué sur le livre ouvert : couvre la palette, les
+// thèmes, le statut, l'interrupteur, la suppression et la fermeture — les
+// boutons ne sont jamais recréés, donc rien ne cesse de répondre.
+function initInteractionsLivreOuvert() {
+  const livreEl = document.getElementById("livre-ouvert");
+
+  livreEl.addEventListener("click", (evt) => {
+    const livre = livreCourant();
+    if (!livre) return;
+
+    const swatch = evt.target.closest(".swatch");
+    if (swatch) {
+      livre.couleur = swatch.dataset.couleur;
+      rendrePalette(livre);
+      if (!livre.couverture) appliquerCouvertureGeneree(livre);
+      sauvegarderLocalStorage();
+      return;
+    }
+
+    const boutonStatut = evt.target.closest("#segmente-statut button");
+    if (boutonStatut) {
+      livre.statut = boutonStatut.dataset.statut;
+      rendreSegmenteStatut(livre);
+      rendreRuban(livre);
+      sauvegarderLocalStorage();
+      return;
+    }
+
+    const interrupteur = evt.target.closest("#interrupteur-telecharge");
+    if (interrupteur) {
+      livre.telecharge = !livre.telecharge;
+      interrupteur.setAttribute("aria-checked", livre.telecharge ? "true" : "false");
+      sauvegarderLocalStorage();
+      return;
+    }
+
+    const action = evt.target.closest("[data-action]");
+    if (!action) return;
+
+    switch (action.dataset.action) {
+      case "retirer-theme": {
+        const index = parseInt(action.dataset.index, 10);
+        livre.themes.splice(index, 1);
+        rendreThemes(livre);
+        sauvegarderLocalStorage();
+        break;
+      }
+      case "ouvrir-ajout-theme":
+        ouvrirChampAjoutTheme();
+        break;
+      case "demander-suppression": {
+        const conteneur = document.getElementById("actions-livre");
+        conteneur.innerHTML =
+          '<span class="confirmation-suppr">Retirer « ' + echapper(livre.titre) + ' » ?' +
+          '<button type="button" class="oui" data-action="confirmer-suppression">Oui, retirer</button>' +
+          '<button type="button" class="annuler" data-action="annuler-suppression">Annuler</button>' +
+          '</span>';
+        break;
+      }
+      case "annuler-suppression":
+        rendreActions();
+        break;
+      case "confirmer-suppression": {
+        const id = livre.id;
+        etat.livres = etat.livres.filter((l) => l.id !== id);
+        fermerLivre({ apresSuppression: true });
+        break;
+      }
+      case "choisir-fichier":
+        document.getElementById("entree-fichier-couverture").click();
+        break;
+      case "chercher-en-ligne":
+        chercherCouvertureEnLigne(livre);
+        break;
+      case "coller-adresse":
+        ouvrirCollageUrl();
+        break;
+      case "valider-url": {
+        const url = document.getElementById("champ-url-couverture").value.trim();
+        if (url) {
+          livre.couverture = url;
+          livre.couvCherchee = true;
+          appliquerCouverture(livre);
+          sauvegarderLocalStorage();
+        }
+        fermerCollageUrl();
+        break;
+      }
+      case "annuler-url":
+        fermerCollageUrl();
+        break;
+    }
+  });
+
+  document.getElementById("fermer-livre").addEventListener("click", () => fermerLivre());
+  document.getElementById("voile").addEventListener("click", () => fermerLivre());
+  document.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape" && etat.livreOuvertId) fermerLivre();
+  });
+}
+
+function ouvrirLivre(id) {
+  if (etat.livreOuvertId) return;
+  const livre = etat.livres.find((l) => l.id === id);
+  if (!livre) return;
+
+  const trancheEl = document.querySelector('.tranche[data-id="' + id + '"]');
+  const rectDepart = trancheEl ? trancheEl.getBoundingClientRect() : null;
+
+  etat.livreOuvertId = id;
+  remplirLivreOuvert(livre);
+
+  if (!livre.couverture && !livre.couvCherchee) {
+    rechercherCouvertureLivre(livre).then(() => rafraichirCouvertureSiOuvert(livre));
+  }
+
+  const voile = document.getElementById("voile");
+  const scene = document.getElementById("scene-livre");
+  const livreEl = document.getElementById("livre-ouvert");
+
+  voile.hidden = false;
+  scene.hidden = false;
+
+  const reduit = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  requestAnimationFrame(() => {
+    voile.classList.add("visible");
+
+    if (reduit || !rectDepart) {
+      livreEl.focus();
+      return;
+    }
+
+    const rectArrivee = livreEl.getBoundingClientRect();
+    const dx = (rectDepart.left + rectDepart.width / 2) - (rectArrivee.left + rectArrivee.width / 2);
+    const dy = (rectDepart.top + rectDepart.height / 2) - (rectArrivee.top + rectArrivee.height / 2);
+    const sx = rectDepart.width / rectArrivee.width;
+    const sy = rectDepart.height / rectArrivee.height;
+
+    livreEl.animate(
+      [
+        { transform: "translate(" + dx + "px, " + dy + "px) scale(" + sx + ", " + sy + ") rotateY(-84deg)", filter: "brightness(1.7)" },
+        { transform: "translate(0px, 0px) scale(1, 1) rotateY(0deg)", filter: "brightness(1)" },
+      ],
+      { duration: 500, easing: "cubic-bezier(.2,.78,.25,1)", fill: "both" }
+    );
+    livreEl.querySelector(".page-gauche").animate(
+      [{ transform: "rotateY(-172deg)" }, { transform: "rotateY(0deg)" }],
+      { duration: 500, easing: "cubic-bezier(.2,.78,.25,1)", fill: "both" }
+    );
+
+    livreEl.focus();
+  });
+}
+
+function fermerLivre({ apresSuppression = false } = {}) {
+  const id = etat.livreOuvertId;
+  if (!id) return;
+
+  const voile = document.getElementById("voile");
+  const scene = document.getElementById("scene-livre");
+  const livreEl = document.getElementById("livre-ouvert");
+  const trancheEl = apresSuppression ? null : document.querySelector('.tranche[data-id="' + id + '"]');
+  const reduit = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const terminer = () => {
+    scene.hidden = true;
+    voile.hidden = true;
+    etat.livreOuvertId = null;
+    reconstruireAvecFlip();
+    if (!apresSuppression) {
+      const cible = document.querySelector('.tranche[data-id="' + id + '"]');
+      if (cible) cible.focus();
+    }
+  };
+
+  voile.classList.remove("visible");
+
+  if (reduit || !trancheEl) {
+    terminer();
+    return;
+  }
+
+  const rectDepart = livreEl.getBoundingClientRect();
+  const rectArrivee = trancheEl.getBoundingClientRect();
+  const dx = (rectArrivee.left + rectArrivee.width / 2) - (rectDepart.left + rectDepart.width / 2);
+  const dy = (rectArrivee.top + rectArrivee.height / 2) - (rectDepart.top + rectDepart.height / 2);
+  const sx = rectArrivee.width / rectDepart.width;
+  const sy = rectArrivee.height / rectDepart.height;
+
+  const animation = livreEl.animate(
+    [
+      { transform: "translate(0px, 0px) scale(1, 1) rotateY(0deg)" },
+      { transform: "translate(" + dx + "px, " + dy + "px) scale(" + sx + ", " + sy + ") rotateY(-84deg)" },
+    ],
+    { duration: 500, easing: "cubic-bezier(.2,.78,.25,1)", fill: "both" }
+  );
+  livreEl.querySelector(".page-gauche").animate(
+    [{ transform: "rotateY(0deg)" }, { transform: "rotateY(-172deg)" }],
+    { duration: 500, easing: "cubic-bezier(.2,.78,.25,1)", fill: "both" }
+  );
+
+  animation.onfinish = terminer;
+}
+
+/* ==========================================================================
+   Recherche et compteurs
+   ========================================================================== */
+
+function normaliser(texte) {
+  return (texte || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function livreCorrespond(livre, terme) {
+  if (!terme) return true;
+  const t = normaliser(terme);
+  return (
+    normaliser(livre.titre).includes(t) ||
+    normaliser(livre.auteur).includes(t) ||
+    livre.themes.some((theme) => normaliser(theme).includes(t))
+  );
+}
+
+function appliquerRecherche() {
+  const terme = etat.recherche.trim();
+  let nbCorrespond = 0;
+
+  document.querySelectorAll(".tranche").forEach((el) => {
+    const livre = etat.livres.find((l) => l.id === el.dataset.id);
+    const correspond = !livre || livreCorrespond(livre, terme);
+    el.classList.toggle("estompee", !correspond);
+    if (correspond) nbCorrespond++;
+  });
+
+  document.getElementById("aucun-resultat").hidden = !(terme && nbCorrespond === 0);
+}
+
+function mettreAJourCompteurs() {
+  const total = etat.livres.length;
+  const aLire = etat.livres.filter((l) => l.statut === "à lire").length;
+  const nonTelecharges = etat.livres.filter((l) => !l.telecharge).length;
+  document.getElementById("compteurs").textContent =
+    total + " livre" + (total !== 1 ? "s" : "") +
+    " · " + aLire + " à lire" +
+    " · " + nonTelecharges + " non téléchargé" + (nonTelecharges !== 1 ? "s" : "");
+}
+
+function initRecherche() {
+  document.getElementById("recherche-livres").addEventListener("input", (evt) => {
+    etat.recherche = evt.target.value;
+    appliquerRecherche();
+  });
+}
+
+function initSelecteurMode() {
+  document.getElementById("segmente-mode").addEventListener("click", (evt) => {
+    const bouton = evt.target.closest("button[data-mode]");
+    if (!bouton || bouton.dataset.mode === etat.mode) return;
+    etat.mode = bouton.dataset.mode;
+    document.querySelectorAll("#segmente-mode button").forEach((b) => {
+      b.setAttribute("aria-pressed", b === bouton ? "true" : "false");
+    });
+    reconstruireAvecFlip();
+  });
+}
+
+/* ==========================================================================
+   Glisser-déposer entre rayons
+   ========================================================================== */
+
+// Index d'insertion déduit de la position horizontale du curseur parmi les
+// tranches déjà présentes (le livre en cours de glissement est exclu).
+function calculerIndexInsertion(tranchesEl, clientX, idExclu) {
+  const enfants = Array.from(tranchesEl.querySelectorAll(".tranche")).filter((el) => el.dataset.id !== idExclu);
+  for (let i = 0; i < enfants.length; i++) {
+    const rect = enfants[i].getBoundingClientRect();
+    if (clientX < rect.left + rect.width / 2) return i;
+  }
+  return enfants.length;
+}
+
+function nettoyerIndicateursDepose() {
+  document.querySelectorAll(".espace-avant").forEach((el) => el.classList.remove("espace-avant"));
+  document.querySelectorAll(".espace-fin").forEach((el) => el.classList.remove("espace-fin"));
+  document.querySelectorAll(".tranches.survolee").forEach((el) => el.classList.remove("survolee"));
+}
+
+// Pendant le survol, les tranches du rayon visé s'écartent à l'endroit
+// exact de l'insertion : une marge sur la tranche suivante, ou un padding
+// en fin de rayon si l'insertion se ferait en dernière position. Le rayon
+// entier est aussi surligné, pour qu'une planche presque vide (peu de
+// livres, donc beaucoup d'espace libre) montre clairement qu'elle accepte
+// le dépôt même loin de la dernière tranche.
+function afficherIndicateurDepose(rayonEl, clientX) {
+  nettoyerIndicateursDepose();
+  const tranchesEl = rayonEl.querySelector(".tranches");
+  tranchesEl.classList.add("survolee");
+  const enfants = Array.from(tranchesEl.querySelectorAll(".tranche")).filter((el) => el.dataset.id !== etat.idGlisse);
+  const index = calculerIndexInsertion(tranchesEl, clientX, etat.idGlisse);
+  if (index < enfants.length) {
+    enfants[index].classList.add("espace-avant");
+  } else {
+    tranchesEl.classList.add("espace-fin");
+  }
+}
+
+// Affecte le livre déposé au groupe visé, l'insère à l'index calculé, et
+// réindexe l'ordre de tout le groupe cible.
+function deposerLivre(id, groupeCible, index) {
+  const livre = etat.livres.find((l) => l.id === id);
+  if (!livre) return;
+  affecterGroupe(livre, etat.mode, groupeCible);
+
+  const groupeReordonne = etat.livres
+    .filter((l) => l.id !== id && champGroupe(l, etat.mode) === groupeCible)
+    .sort((a, b) => a.ordre - b.ordre);
+  groupeReordonne.splice(index, 0, livre);
+  groupeReordonne.forEach((l, i) => { l.ordre = i; });
+}
+
+function initGlisserDeposer() {
+  const conteneur = document.getElementById("rayons");
+
+  conteneur.addEventListener("dragstart", (evt) => {
+    const tranche = evt.target.closest(".tranche");
+    if (!tranche) return;
+    etat.idGlisse = tranche.dataset.id;
+    evt.dataTransfer.effectAllowed = "move";
+    evt.dataTransfer.setData("text/plain", tranche.dataset.id);
+    tranche.classList.add("en-glissement");
+  });
+
+  conteneur.addEventListener("dragend", () => {
+    etat.idGlisse = null;
+    nettoyerIndicateursDepose();
+    document.querySelectorAll(".tranche.en-glissement").forEach((el) => el.classList.remove("en-glissement"));
+  });
+
+  conteneur.addEventListener("dragover", (evt) => {
+    const rayonEl = evt.target.closest(".rayon");
+    if (!rayonEl || !etat.idGlisse) return;
+    evt.preventDefault();
+    evt.dataTransfer.dropEffect = "move";
+    afficherIndicateurDepose(rayonEl, evt.clientX);
+  });
+
+  conteneur.addEventListener("drop", (evt) => {
+    const rayonEl = evt.target.closest(".rayon");
+    if (!rayonEl || !etat.idGlisse) return;
+    evt.preventDefault();
+    const id = etat.idGlisse;
+    const groupeCible = rayonEl.dataset.groupe;
+    const index = calculerIndexInsertion(rayonEl.querySelector(".tranches"), evt.clientX, id);
+
+    nettoyerIndicateursDepose();
+    deposerLivre(id, groupeCible, index);
+    etat.idGlisse = null;
+    reconstruireAvecFlip();
+  });
+}
+
+/* ==========================================================================
+   Robustesse réseau : deux transports, délai maximum, diagnostic de cause
+   ========================================================================== */
+
+const DELAI_MAX_MS = 14000;
+
+// Mémorise le transport qui a fonctionné, pour l'essayer en premier ensuite.
+let transportPrefere = null;
+
+function delaiEcoule(ms) {
+  return new Promise((_resolve, rejeter) => {
+    setTimeout(() => rejeter({ nom: "delai", message: "Délai dépassé" }), ms);
+  });
+}
+
+// Un Promise.race sert de minuteur pour fetch — jamais un AbortController seul.
+function essayerFetch(url) {
+  return Promise.race([
+    fetch(url).then((reponse) => {
+      if (!reponse.ok) throw { nom: "http", message: "Statut " + reponse.status };
+      return reponse.json();
+    }),
+    delaiEcoule(DELAI_MAX_MS),
+  ]);
+}
+
+// xhr.timeout sert de minuteur pour XMLHttpRequest.
+function essayerXHR(url) {
+  return new Promise((resolve, rejeter) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.timeout = DELAI_MAX_MS;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch (e) {
+          rejeter({ nom: "analyse", message: "Réponse invalide" });
+        }
+      } else {
+        rejeter({ nom: "http", message: "Statut " + xhr.status });
+      }
+    };
+    xhr.ontimeout = () => rejeter({ nom: "delai", message: "Délai dépassé" });
+    xhr.onerror = () => rejeter({ nom: "reseau", message: "Erreur réseau" });
+    xhr.send();
+  });
+}
+
+// Essaie le transport préféré, puis l'autre si l'échec n'est pas un simple
+// dépassement de délai (auquel cas le second transport timerait pareil).
+function requeteJSON(url) {
+  const ordre = transportPrefere === "xhr" ? ["xhr", "fetch"] : ["fetch", "xhr"];
+  const lancer = (transport) => (transport === "xhr" ? essayerXHR(url) : essayerFetch(url));
+
+  return lancer(ordre[0]).then(
+    (resultat) => {
+      transportPrefere = ordre[0];
+      return resultat;
+    },
+    (erreur) => {
+      if (erreur && erreur.nom === "delai") throw erreur;
+      return lancer(ordre[1]).then((resultat) => {
+        transportPrefere = ordre[1];
+        return resultat;
+      });
+    }
+  );
+}
+
+// Nomme la cause probable d'un échec réseau, pour un message utile plutôt
+// qu'une erreur technique opaque.
+function diagnostiquerContexte() {
+  if (location.protocol === "file:") return "fichier";
+  try {
+    if (self !== top) return "cadre";
+  } catch (e) {
+    return "cadre";
+  }
+  return "serveur";
+}
+
+function afficherBandeauReseau() {
+  const contexte = diagnostiquerContexte();
+  let message, quefaire;
+
+  if (contexte === "fichier") {
+    message = "Les recherches en ligne sont bloquées : cette page est ouverte directement depuis un fichier.";
+    quefaire = "Lance <code>python3 -m http.server 8000</code> dans ce dossier, puis ouvre <code>http://localhost:8000/bibliotheque.html</code>.";
+  } else if (contexte === "cadre") {
+    message = "Les recherches en ligne sont bloquées : cette page est affichée dans un cadre qui interdit les appels extérieurs.";
+    quefaire = "Télécharge le fichier et ouvre-le directement (ou via un serveur local), en dehors de ce cadre.";
+  } else {
+    message = "La recherche en ligne a échoué.";
+    quefaire = "Cause possible : une extension de filtrage, un réseau d'entreprise restrictif, ou une panne passagère d'Open Library.";
+  }
+
+  const bandeau = document.getElementById("bandeau-reseau");
+  bandeau.innerHTML =
+    '<p class="bandeau-message">' + echapper(message) + "</p>" +
+    '<details class="bandeau-detail"><summary>Que faire ?</summary>' +
+    "<p>" + quefaire + "</p>" +
+    '<p class="bandeau-rappel">Le reste de l’application — étagère, édition, rangement, export — fonctionne entièrement sans réseau.</p>' +
+    "</details>" +
+    '<button type="button" class="bouton-reessayer" id="bouton-reessayer">Réessayer</button>';
+  bandeau.hidden = false;
+}
+
+/* ==========================================================================
+   Open Library : recherche, résumé, couverture, suggestion de rayon
+   ========================================================================== */
+
+function urlRecherche(titre) {
+  return "https://openlibrary.org/search.json?q=" + encodeURIComponent(titre) +
+    "&limit=5&fields=key,title,author_name,first_publish_year,cover_i,subject";
+}
+
+function urlOeuvre(key) {
+  return "https://openlibrary.org" + key + ".json";
+}
+
+function urlEditions(key) {
+  return "https://openlibrary.org" + key + "/editions.json?limit=50";
+}
+
+// Le titre renvoyé par la recherche est celui de l'œuvre (souvent l'original,
+// donc en anglais) : on va chercher parmi ses éditions une version en
+// français et on reprend son titre et sa couverture. S'il n'en existe pas,
+// on garde le résultat d'origine tel quel (jamais de titre inventé).
+async function franciserResultat(doc) {
+  if (!doc.key) return doc;
+  try {
+    const donnees = await requeteJSON(urlEditions(doc.key));
+    const editionsFr = (donnees.entries || []).filter((e) =>
+      (e.languages || []).some((l) => l.key === "/languages/fre")
+    );
+    if (editionsFr.length === 0) return doc;
+    const edition = editionsFr.find((e) => e.covers && e.covers.length) || editionsFr[0];
+    return Object.assign({}, doc, {
+      title: edition.title || doc.title,
+      cover_i: (edition.covers && edition.covers[0]) || doc.cover_i,
+    });
+  } catch (erreur) {
+    return doc;
+  }
+}
+
+function urlCouverture(coverId, taille) {
+  return "https://covers.openlibrary.org/b/id/" + coverId + "-" + (taille || "M") + ".jpg";
+}
+
+// Nettoie le résumé sans le réécrire : liens markdown aplatis, mentions de
+// source retirées, coupe à une fin de phrase au-delà de 900 caractères.
+function nettoyerResume(brut) {
+  if (!brut) return "";
+  let texte = typeof brut === "string" ? brut : brut.value || "";
+  texte = texte.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  texte = texte.split(/\n-{3,}\n/)[0];
+  texte = texte.replace(/\(?\s*source\s*:.*$/gims, "");
+  texte = texte.replace(/\s+/g, " ").trim();
+  if (texte.length > 900) {
+    const tranche = texte.slice(0, 900);
+    const dernierPoint = Math.max(tranche.lastIndexOf("."), tranche.lastIndexOf("!"), tranche.lastIndexOf("?"));
+    texte = dernierPoint > 200 ? tranche.slice(0, dernierPoint + 1) : tranche.trim() + "…";
+  }
+  return texte;
+}
+
+// Les sujets ne servent qu'à proposer un rayon de départ, jamais à inventer
+// du contenu : l'utilisateur peut toujours corriger.
+// Ordre volontaire : les rayons les plus spécifiques d'abord. Open Library
+// attribue parfois des sujets croisés (ex. "American Fantasy fiction" sur un
+// roman de science-fiction) ; vérifier "science fiction" avant "fantasy"
+// évite ce genre de faux positif.
+const REGLES_RAYON = [
+  { motif: /science fiction|space opera|dystopia|robot/i, rayon: "Science-fiction" },
+  { motif: /fantasy|magic|dragon|sorcer|wizard/i, rayon: "Fantasy" },
+  { motif: /romance|love stor/i, rayon: "Romance" },
+  { motif: /thriller|detective|crime|mystery|noir/i, rayon: "Thriller & polar" },
+  { motif: /comic|graphic novel|manga/i, rayon: "BD & manga" },
+  { motif: /mythology|legend|antiquity|greek|roman empire/i, rayon: "Mythes & Antiquité" },
+  { motif: /essay|philosophy|history|biography|nonfiction|non-fiction/i, rayon: "Essais & récits" },
+  { motif: /fiction|literature|novel/i, rayon: "Littérature" },
+];
+
+function suggererRayon(sujets) {
+  if (!sujets || !sujets.length) return "Autres";
+  const texte = sujets.join(" ");
+  for (const regle of REGLES_RAYON) {
+    if (regle.motif.test(texte)) return regle.rayon;
+  }
+  return "Autres";
+}
+
+/* ==========================================================================
+   Création de livres
+   ========================================================================== */
+
+let compteurIdLivre = etat.livres.length;
+function genererIdLivre() {
+  compteurIdLivre += 1;
+  return "livre-" + String(compteurIdLivre).padStart(2, "0") + "-" + Math.random().toString(36).slice(2, 6);
+}
+
+function creerNouveauLivre(champs) {
+  const id = genererIdLivre();
+  const rayon = champs.rayon || "Autres";
+  const ordre = etat.livres.filter((l) => l.rayon === rayon).length;
+  return creerLivre({
+    id,
+    titre: champs.titre,
+    auteur: champs.auteur || "Auteur inconnu",
+    annee: champs.annee ?? null,
+    statut: "à lire",
+    telecharge: false,
+    rayon,
+    themes: [],
+    resume: champs.resume || "",
+    couverture: champs.couverture || "",
+    couvCherchee: !!champs.couverture,
+    couleur: RELIURES[hacher(id) % RELIURES.length],
+    ordre,
+  });
+}
+
+/* ==========================================================================
+   Couvertures : automatique, image locale, adresse collée, recherche
+   ========================================================================== */
+
+// Met à jour l'affichage si le livre concerné est actuellement ouvert (la
+// recherche automatique et manuelle sont asynchrones : le livre a pu être
+// fermé, ou un autre ouvert entre-temps).
+function rafraichirCouvertureSiOuvert(livre) {
+  if (etat.livreOuvertId === livre.id) appliquerCouverture(livre);
+}
+
+function attendre(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Une seule requête, utilisée aussi bien par la file d'attente automatique
+// que par l'ouverture d'un livre dépourvu de couverture.
+async function rechercherCouvertureLivre(livre) {
+  try {
+    const donnees = await requeteJSON(urlRecherche(livre.titre + " " + livre.auteur));
+    const doc = (donnees.docs || []).find((d) => d.cover_i);
+    if (doc) livre.couverture = urlCouverture(doc.cover_i, "M");
+    livre.couvCherchee = true;
+    sauvegarderLocalStorage();
+    return true;
+  } catch (erreur) {
+    // Échec réseau : on ne marque pas couvCherchee, pour que Réessayer
+    // puisse reposer la question plus tard plutôt que d'abandonner pour de bon.
+    return false;
+  }
+}
+
+// File d'attente en arrière-plan au chargement : une requête toutes les
+// 320 ms pour ménager l'API publique. S'arrête (sans boucler frénétiquement)
+// à la première panne réseau ; Réessayer la relance.
+let recherchAutomatiqueEnCours = false;
+async function lancerRechercheCouverturesAutomatique() {
+  if (recherchAutomatiqueEnCours) return;
+  recherchAutomatiqueEnCours = true;
+  const indicateur = document.getElementById("etat-couvertures");
+
+  const aChercher = etat.livres.filter((l) => !l.couverture && !l.couvCherchee);
+  let nbEchecs = 0;
+
+  for (const livre of aChercher) {
+    indicateur.hidden = false;
+    indicateur.textContent = "Recherche des couvertures…";
+    const ok = await rechercherCouvertureLivre(livre);
+    if (!ok) {
+      nbEchecs++;
+      break; // une panne réseau : inutile d'enchaîner les échecs identiques
+    }
+    rafraichirCouvertureSiOuvert(livre);
+    await attendre(320);
+  }
+
+  if (nbEchecs > 0) {
+    indicateur.textContent = "Couvertures : recherche interrompue (réseau indisponible).";
+  } else {
+    indicateur.hidden = true;
+  }
+  recherchAutomatiqueEnCours = false;
+}
+
+function initRechercheAutomatiqueCouvertures() {
+  lancerRechercheCouverturesAutomatique();
+}
+
+// Réduit une image à 420px de large maximum et la convertit en JPEG :
+// aucun réseau, le résultat (data-URL) survit au rechargement.
+function redimensionnerImageCouverture(fichier, largeurMax, qualite) {
+  return new Promise((resolve, reject) => {
+    const lecteur = new FileReader();
+    lecteur.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const largeur = Math.min(largeurMax, image.width);
+        const hauteur = Math.round(image.height * (largeur / image.width));
+        const canevas = document.createElement("canvas");
+        canevas.width = largeur;
+        canevas.height = hauteur;
+        canevas.getContext("2d").drawImage(image, 0, 0, largeur, hauteur);
+        resolve(canevas.toDataURL("image/jpeg", qualite));
+      };
+      image.onerror = () => reject(new Error("Image illisible"));
+      image.src = lecteur.result;
+    };
+    lecteur.onerror = () => reject(new Error("Fichier illisible"));
+    lecteur.readAsDataURL(fichier);
+  });
+}
+
+function ouvrirCollageUrl() {
+  document.getElementById("boutons-couverture").hidden = true;
+  document.getElementById("collage-url").hidden = false;
+  document.getElementById("champ-url-couverture").focus();
+}
+
+function fermerCollageUrl() {
+  document.getElementById("boutons-couverture").hidden = false;
+  document.getElementById("collage-url").hidden = true;
+  document.getElementById("champ-url-couverture").value = "";
+}
+
+// Recherche manuelle (bouton "Chercher en ligne") : propose plusieurs
+// vignettes plutôt que d'imposer le premier résultat.
+async function chercherCouvertureEnLigne(livre) {
+  const conteneur = document.getElementById("resultats-couverture");
+  conteneur.hidden = false;
+  conteneur.innerHTML = '<span class="statut-recherche-couv">Recherche…</span>';
+
+  try {
+    const donnees = await requeteJSON(urlRecherche(livre.titre + " " + livre.auteur));
+    const couvertures = [];
+    (donnees.docs || []).forEach((doc) => {
+      if (doc.cover_i && !couvertures.includes(doc.cover_i)) couvertures.push(doc.cover_i);
+    });
+
+    if (couvertures.length === 0) {
+      conteneur.innerHTML = '<span class="statut-recherche-couv">Aucune couverture trouvée.</span>';
+      return;
+    }
+    conteneur.innerHTML =
+      '<span class="statut-recherche-couv">Choisis une couverture :</span>' +
+      couvertures
+        .slice(0, 6)
+        .map(
+          (id) =>
+            '<button type="button" class="vignette-couv-choix" data-cover-id="' + id + '">' +
+            '<img src="' + urlCouverture(id, "S") + '" alt="" loading="lazy"></button>'
+        )
+        .join("");
+  } catch (erreur) {
+    conteneur.innerHTML = '<span class="statut-recherche-couv">Recherche impossible (réseau indisponible).</span>';
+  }
+}
+
+function initCouvertures() {
+  const entreeFichier = document.getElementById("entree-fichier-couverture");
+
+  entreeFichier.addEventListener("change", async (evt) => {
+    const fichier = evt.target.files[0];
+    evt.target.value = "";
+    if (!fichier) return;
+    const livre = livreCourant();
+    if (!livre) return;
+    try {
+      livre.couverture = await redimensionnerImageCouverture(fichier, 420, 0.82);
+      livre.couvCherchee = true;
+      appliquerCouverture(livre);
+      sauvegarderLocalStorage();
+    } catch (erreur) {
+      // Fichier illisible : la couverture générée reste affichée.
+    }
+  });
+
+  document.getElementById("collage-url").addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter") { evt.preventDefault(); document.querySelector('[data-action="valider-url"]').click(); }
+    if (evt.key === "Escape") { evt.preventDefault(); fermerCollageUrl(); }
+  });
+
+  document.getElementById("resultats-couverture").addEventListener("click", (evt) => {
+    const bouton = evt.target.closest(".vignette-couv-choix");
+    if (!bouton) return;
+    const livre = livreCourant();
+    if (!livre) return;
+    livre.couverture = urlCouverture(bouton.dataset.coverId, "M");
+    livre.couvCherchee = true;
+    appliquerCouverture(livre);
+    sauvegarderLocalStorage();
+    document.getElementById("resultats-couverture").hidden = true;
+  });
+}
+
+/* ==========================================================================
+   Panneau d'ajout de livres
+   ========================================================================== */
+
+function construireCandidatHTML(doc, ligneIndex, candidatIndex) {
+  const auteur = (doc.author_name && doc.author_name[0]) || "Auteur inconnu";
+  const annee = doc.first_publish_year || "?";
+  const vignette = doc.cover_i
+    ? '<img class="candidat-vignette" src="' + urlCouverture(doc.cover_i, "S") + '" alt="" loading="lazy">'
+    : '<span class="candidat-vignette candidat-vignette-vide" aria-hidden="true">❧</span>';
+  return (
+    '<button type="button" class="candidat" data-ligne="' + ligneIndex + '" data-candidat="' + candidatIndex + '">' +
+      vignette +
+      '<span class="candidat-info">' +
+        '<span class="candidat-titre">' + echapper(doc.title || "") + "</span>" +
+        '<span class="candidat-auteur">' + echapper(auteur) + " · " + echapper(String(annee)) + "</span>" +
+      "</span>" +
+    "</button>"
+  );
+}
+
+function boutonFicheVide(ligneIndex) {
+  return '<button type="button" class="candidat candidat-vide" data-ligne="' + ligneIndex + '" data-candidat="vide">Créer une fiche vide à compléter</button>';
+}
+
+async function chercherEtAfficherLigne(titre, ligneIndex, ligneEl) {
+  const etatEl = ligneEl.querySelector(".ligne-etat");
+  const candidatsEl = ligneEl.querySelector(".candidats");
+  try {
+    const donnees = await requeteJSON(urlRecherche(titre));
+    let docs = (donnees && donnees.docs) || [];
+
+    if (docs.length > 0) {
+      etatEl.textContent = "Recherche des éditions françaises…";
+      docs = await Promise.all(docs.map(franciserResultat));
+    }
+    etat.resultatsRecherche[ligneIndex] = { titre, docs };
+
+    if (docs.length === 0) {
+      etatEl.textContent = "Aucun résultat.";
+      candidatsEl.innerHTML = boutonFicheVide(ligneIndex);
+      return;
+    }
+    etatEl.textContent = docs.length + " résultat" + (docs.length > 1 ? "s" : "") + " — choisis le bon :";
+    candidatsEl.innerHTML =
+      docs.map((doc, i) => construireCandidatHTML(doc, ligneIndex, i)).join("") +
+      boutonFicheVide(ligneIndex);
+  } catch (erreur) {
+    etat.resultatsRecherche[ligneIndex] = { titre, docs: [] };
+    etatEl.textContent = "Recherche impossible.";
+    candidatsEl.innerHTML = boutonFicheVide(ligneIndex);
+    afficherBandeauReseau();
+  }
+}
+
+function marquerLigneAjoutee(ligneEl, titre) {
+  ligneEl.querySelector(".ligne-etat").textContent = "Ajouté : " + titre + " ✓";
+  ligneEl.querySelector(".candidats").innerHTML = "";
+}
+
+async function ajouterLivreDepuisDoc(titreLigne, doc, ligneEl) {
+  ligneEl.querySelector(".ligne-etat").textContent = "Ajout…";
+  ligneEl.querySelector(".candidats").innerHTML = "";
+
+  const rayon = suggererRayon(doc.subject);
+  const couverture = doc.cover_i ? urlCouverture(doc.cover_i, "M") : "";
+  let resume = "";
+
+  if (doc.key) {
+    try {
+      const oeuvre = await requeteJSON(urlOeuvre(doc.key));
+      resume = nettoyerResume(oeuvre.description);
+    } catch (erreur) {
+      // Le résumé reste vide : on n'invente jamais de contenu.
+      afficherBandeauReseau();
+    }
+  }
+
+  const livre = creerNouveauLivre({
+    titre: doc.title || titreLigne,
+    auteur: (doc.author_name && doc.author_name[0]) || "",
+    annee: doc.first_publish_year || null,
+    couverture,
+    resume,
+    rayon,
+  });
+  etat.livres.push(livre);
+  reconstruireAvecFlip();
+  marquerLigneAjoutee(ligneEl, livre.titre);
+}
+
+function ajouterLivreVide(titreLigne, ligneEl) {
+  const livre = creerNouveauLivre({ titre: titreLigne, rayon: "Autres" });
+  etat.livres.push(livre);
+  reconstruireAvecFlip();
+  marquerLigneAjoutee(ligneEl, livre.titre);
+}
+
+// Recherche chaque ligne en parallèle (Promise.all implicite : chaque appel
+// démarre immédiatement, une ligne lente ne bloque jamais les autres).
+function lancerRecherche(lignes) {
+  if (!lignes.length) return;
+  document.getElementById("bandeau-reseau").hidden = true;
+  etat.dernieresLignes = lignes;
+  etat.resultatsRecherche = new Array(lignes.length);
+
+  const conteneur = document.getElementById("resultats-ajout");
+  conteneur.innerHTML = lignes
+    .map(
+      (titre, i) =>
+        '<div class="ligne-resultat" data-ligne-conteneur="' + i + '">' +
+        '<div class="ligne-entete"><strong>' + echapper(titre) + '</strong><span class="ligne-etat">Recherche…</span></div>' +
+        '<div class="candidats"></div>' +
+        "</div>"
+    )
+    .join("");
+
+  lignes.forEach((titre, i) => {
+    const ligneEl = conteneur.querySelector('[data-ligne-conteneur="' + i + '"]');
+    chercherEtAfficherLigne(titre, i, ligneEl);
+  });
+}
+
+function ouvrirPanneauAjout() {
+  document.getElementById("voile-ajout").hidden = false;
+  document.getElementById("panneau-ajout").hidden = false;
+  if (diagnostiquerContexte() !== "serveur") afficherBandeauReseau();
+  document.getElementById("zone-titres").focus();
+}
+
+function fermerPanneauAjout() {
+  document.getElementById("voile-ajout").hidden = true;
+  document.getElementById("panneau-ajout").hidden = true;
+  document.getElementById("bouton-ouvrir-ajout").focus();
+}
+
+function initAjoutLivres() {
+  document.getElementById("bouton-ouvrir-ajout").addEventListener("click", ouvrirPanneauAjout);
+  document.getElementById("fermer-ajout").addEventListener("click", fermerPanneauAjout);
+  document.getElementById("voile-ajout").addEventListener("click", fermerPanneauAjout);
+  document.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape" && !document.getElementById("panneau-ajout").hidden) fermerPanneauAjout();
+  });
+
+  document.getElementById("lancer-recherche").addEventListener("click", () => {
+    const lignes = document
+      .getElementById("zone-titres")
+      .value.split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    lancerRecherche(lignes);
+  });
+
+  // Remet les deux transports en jeu, relance la recherche des lignes et la
+  // file d'attente des couvertures automatiques si elle s'était arrêtée.
+  document.getElementById("bandeau-reseau").addEventListener("click", (evt) => {
+    if (!evt.target.closest("#bouton-reessayer")) return;
+    transportPrefere = null;
+    lancerRecherche(etat.dernieresLignes);
+    lancerRechercheCouverturesAutomatique();
+  });
+
+  // Délégué : les boutons candidats sont recréés à chaque recherche.
+  document.getElementById("resultats-ajout").addEventListener("click", (evt) => {
+    const bouton = evt.target.closest("[data-ligne]");
+    if (!bouton) return;
+    const ligneIndex = parseInt(bouton.dataset.ligne, 10);
+    const entree = etat.resultatsRecherche[ligneIndex];
+    if (!entree) return;
+    const ligneEl = bouton.closest(".ligne-resultat");
+
+    if (bouton.dataset.candidat === "vide") {
+      ajouterLivreVide(entree.titre, ligneEl);
+      return;
+    }
+    const doc = entree.docs[parseInt(bouton.dataset.candidat, 10)];
+    if (doc) ajouterLivreDepuisDoc(entree.titre, doc, ligneEl);
+  });
+}
+
+/* ==========================================================================
+   Export / import
+   ========================================================================== */
+
+function exporterBibliotheque() {
+  const donnees = { version: 1, exporteLe: new Date().toISOString(), livres: etat.livres };
+  const blob = new Blob([JSON.stringify(donnees, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const date = new Date().toISOString().slice(0, 10);
+
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = "bibliotheque-" + date + ".json";
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  URL.revokeObjectURL(url);
+}
+
+function fermerPanneauImport() {
+  document.getElementById("voile-import").hidden = true;
+  document.getElementById("panneau-import").hidden = true;
+  etat.importEnAttente = null;
+  document.getElementById("bouton-importer").focus();
+}
+
+function afficherChoixImport(nbLivres) {
+  document.getElementById("actions-import").hidden = false;
+  document.getElementById("resume-import").textContent =
+    nbLivres + " livre" + (nbLivres > 1 ? "s" : "") + " trouvé" + (nbLivres > 1 ? "s" : "") +
+    " dans ce fichier. Remplacer la bibliothèque actuelle, ou les ajouter à la suite ?";
+  document.getElementById("voile-import").hidden = false;
+  document.getElementById("panneau-import").hidden = false;
+}
+
+function afficherErreurImport(message) {
+  document.getElementById("actions-import").hidden = true;
+  document.getElementById("resume-import").textContent = message;
+  document.getElementById("voile-import").hidden = false;
+  document.getElementById("panneau-import").hidden = false;
+}
+
+function initExportImport() {
+  document.getElementById("bouton-exporter").addEventListener("click", exporterBibliotheque);
+
+  document.getElementById("bouton-importer").addEventListener("click", () => {
+    document.getElementById("entree-import").click();
+  });
+
+  document.getElementById("entree-import").addEventListener("change", async (evt) => {
+    const fichier = evt.target.files[0];
+    evt.target.value = "";
+    if (!fichier) return;
+    try {
+      const texte = await fichier.text();
+      const donnees = JSON.parse(texte);
+      if (!donnees || !Array.isArray(donnees.livres)) throw new Error("format invalide");
+      etat.importEnAttente = donnees.livres;
+      afficherChoixImport(donnees.livres.length);
+    } catch (erreur) {
+      afficherErreurImport("Ce fichier n'est pas un export valide de la bibliothèque.");
+    }
+  });
+
+  document.getElementById("import-remplacer").addEventListener("click", () => {
+    if (!etat.importEnAttente) return;
+    etat.livres = etat.importEnAttente.map(normaliserLivreCharge);
+    fermerPanneauImport();
+    reconstruireAvecFlip();
+  });
+
+  document.getElementById("import-ajouter").addEventListener("click", () => {
+    if (!etat.importEnAttente) return;
+    const idsExistants = new Set(etat.livres.map((l) => l.id));
+    const nouveaux = etat.importEnAttente.map((champs) => {
+      const livre = normaliserLivreCharge(champs);
+      if (!livre.id || idsExistants.has(livre.id)) livre.id = genererIdLivre();
+      idsExistants.add(livre.id);
+      return livre;
+    });
+    etat.livres = etat.livres.concat(nouveaux);
+    fermerPanneauImport();
+    reconstruireAvecFlip();
+  });
+
+  document.getElementById("import-annuler").addEventListener("click", fermerPanneauImport);
+  document.getElementById("voile-import").addEventListener("click", fermerPanneauImport);
+  document.getElementById("fermer-avertissement-stockage").addEventListener("click", () => {
+    document.getElementById("avertissement-stockage").hidden = true;
+  });
+  document.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape" && !document.getElementById("panneau-import").hidden) fermerPanneauImport();
+  });
+}
+
+construireEtagere();
+initNavigationClavier();
+initOuvertureLivre();
+initChampsEditables();
+initInteractionsLivreOuvert();
+initRecherche();
+initSelecteurMode();
+initGlisserDeposer();
+initAjoutLivres();
+initCouvertures();
+initRechercheAutomatiqueCouvertures();
+initExportImport();
+
+</script>
+</body>
+</html>
