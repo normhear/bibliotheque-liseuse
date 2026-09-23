@@ -285,7 +285,12 @@
   .tranche .zone-titre{
     position: absolute;
     left: 50%;
-    top: 16px;
+    /* rotate(-90deg) tourne autour du CENTRE de la boîte, pas de son bord
+       haut : pour que le texte pivoté commence bien à 16px du haut de la
+       tranche et s'étende sur (var(--h) - 94px), il faut placer ce centre
+       au bon endroit avant rotation, pas caler "top" naïvement sur 16px
+       (ce qui faisait déborder le texte hors de la tranche). */
+    top: calc(var(--h) / 2 - 40px);
     width: calc(var(--h) - 94px);
     height: 18px;
     line-height: 18px;
@@ -306,7 +311,9 @@
   .tranche .zone-auteur{
     position: absolute;
     left: 50%;
-    bottom: 10px;
+    /* Même correction que .zone-titre : la rotation se fait autour du
+       centre, donc on positionne via "top" calculé plutôt que "bottom". */
+    top: calc(var(--h) - 47px);
     width: 60px;
     height: 14px;
     line-height: 14px;
@@ -2976,8 +2983,12 @@ function attendre(ms) {
 async function rechercherCouvertureLivre(livre) {
   try {
     const donnees = await requeteJSON(urlRecherche(livre.titre + " " + livre.auteur));
-    const doc = (donnees.docs || []).find((d) => d.cover_i);
-    if (doc) livre.couverture = urlCouverture(doc.cover_i, "M");
+    let doc = (donnees.docs || []).find((d) => d.cover_i);
+    // Reprend la couverture d'une édition française quand elle existe (même
+    // logique que la recherche manuelle), plutôt que la couverture anglaise
+    // de l'œuvre d'origine.
+    if (doc) doc = await franciserResultat(doc);
+    if (doc && doc.cover_i) livre.couverture = urlCouverture(doc.cover_i, "M");
     livre.couvCherchee = true;
     sauvegarderLocalStorage();
     return true;
