@@ -2875,10 +2875,17 @@ async function franciserResultat(doc) {
       (e.languages || []).some((l) => l.key === "/languages/fre")
     );
     if (editionsFr.length === 0) return doc;
-    const edition = editionsFr.find((e) => e.covers && e.covers.length) || editionsFr[0];
+    // Certaines éditions françaises ont leur propre résumé (souvent la
+    // quatrième de couverture d'origine) : on privilégie une édition qui a
+    // à la fois une couverture et un résumé, plutôt que la première venue.
+    const edition =
+      editionsFr.find((e) => e.description && e.covers && e.covers.length) ||
+      editionsFr.find((e) => e.covers && e.covers.length) ||
+      editionsFr[0];
     return Object.assign({}, doc, {
       title: edition.title || doc.title,
       cover_i: (edition.covers && edition.covers[0]) || doc.cover_i,
+      descriptionFr: edition.description || null,
     });
   } catch (erreur) {
     return doc;
@@ -2895,6 +2902,9 @@ function nettoyerResume(brut) {
   if (!brut) return "";
   let texte = typeof brut === "string" ? brut : brut.value || "";
   texte = texte.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  // Aplatit l'emphase markdown (*texte*, **texte**) : c'est la mise en forme
+  // qui disparaît, jamais le texte lui-même.
+  texte = texte.replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1");
   texte = texte.split(/\n-{3,}\n/)[0];
   texte = texte.replace(/\(?\s*source\s*:.*$/gims, "");
   texte = texte.replace(/\s+/g, " ").trim();
@@ -3209,7 +3219,12 @@ async function ajouterLivreDepuisDoc(titreLigne, doc, ligneEl) {
   const couverture = doc.cover_i ? urlCouverture(doc.cover_i, "M") : "";
   let resume = "";
 
-  if (doc.key) {
+  if (doc.descriptionFr) {
+    // Une édition française avait son propre résumé (souvent la véritable
+    // quatrième de couverture) : on le préfère à celui, en anglais, de
+    // l'œuvre d'origine.
+    resume = nettoyerResume(doc.descriptionFr);
+  } else if (doc.key) {
     try {
       const oeuvre = await requeteJSON(urlOeuvre(doc.key));
       resume = nettoyerResume(oeuvre.description);
